@@ -50,12 +50,22 @@ CAL_READ_MEASUREMENT = 5
 CAL_SAVE_SETTINGS = 6
 CAL_HELLO = 7
 
+DEVICE_STATE_DISCONNECTED = 0
+DEVICE_STATE_READING_SETTINGS = 1
+DEVICE_STATE_READING_OVERRIDES = 2
+DEVICE_STATE_READING_MEASUREMENTS = 3
+DEVICE_STATE_CONNECTED = 4
+
 class CANThread(QThread):
     update_measurement_signal = pyqtSignal(int,int,int)
+    update_setting_signal = pyqtSignal(int,int,int)
+    update_override_signal = pyqtSignal(int,int,int,int)
+    update_hello_signal = pyqtSignal(int)
     send_status_signal = pyqtSignal(int)
     
     def __init__(self):
         self.bus = None
+        self.device_id = -1
         
         QThread.__init__(self)
 
@@ -95,16 +105,26 @@ class CANThread(QThread):
                         value |= msg.data[6] << 16
                         value |= msg.data[7] << 24
 
-                        #CAL_READ_SETTING
-                        #CAL_READ_OVERRIDE
-                        #CAL_READ_MEASUREMENT
-
                         print("UPDATE from: "+str(device_id)+" type: "+str(message_type)+" start: "+str(var_start)+" len: "+str(var_len)+" value: "+str(value)) 
+
+                        if message_type == CAL_HELLO:
+                            self.update_hello_signal.emit(device_id)
+
+                        if device_id != self.device_id:
+                            continue
 
                         if message_type == CAL_READ_MEASUREMENT:               
                             self.update_measurement_signal.emit(var_start,var_len,value)
-                            continue
+                        elif message_type == CAL_READ_SETTING:
+                            self.update_setting_signal.emit(var_start,var_len,value)
+                        elif message_type == CAL_OVERRIDE_ON:
+                            self.update_override_signal.emit(True,var_start,var_len,value)
+                        elif message_type == CAL_OVERRIDE_OFF:
+                            self.update_override_signal.emit(False,var_start,var_len,value)
 
+    @pyqtSlot(int)
+    def setDeviceId(self, device_id):
+        self.device_id = device_id
 
     @pyqtSlot(int,int,int,int)
     def setSetting(self, device_id, var_start, var_len, value):
@@ -183,6 +203,48 @@ class CANThread(QThread):
                 self.bus.send(msg, 1)
             except:
                 print("Failed to send CAN message")
+
+    @pyqtSlot(int,int,int)
+    def readSetting(self, device_id, var_start, var_len):
+        msg_data = [0,0,0,0,0,0,0,0]
+        msg_id = SSCCP_COMMAND_ID
+
+        msg_data[0] = (device_id << 4) | CAL_READ_SETTING
+        msg_data[1] = var_start & 0x0F
+        msg_data[2] = var_start >> 8
+        msg_data[3] = var_len
+        msg_data[4] = 0
+        msg_data[5] = 0
+        msg_data[6] = 0
+        msg_data[7] = 0
+
+        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
+        if self.bus != None:
+            try:
+                self.bus.send(msg, 1)
+            except:
+                print("Failed to send CAN message")
+
+    @pyqtSlot(int,int,int)
+    def readOverride(self, device_id, var_start, var_len):
+        msg_data = [0,0,0,0,0,0,0,0]
+        msg_id = SSCCP_COMMAND_ID
+
+        msg_data[0] = (device_id << 4) | CAL_READ_OVERRIDE
+        msg_data[1] = var_start & 0x0F
+        msg_data[2] = var_start >> 8
+        msg_data[3] = var_len
+        msg_data[4] = 0
+        msg_data[5] = 0
+        msg_data[6] = 0
+        msg_data[7] = 0
+
+        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
+        if self.bus != None:
+            try:
+                self.bus.send(msg, 1)
+            except:
+                print("Failed to send CAN message")
     
 
 class Measurement:
@@ -219,15 +281,20 @@ class Form(QWidget):
     set_setting_signal = pyqtSignal(int,int,int,int)
     set_override_signal = pyqtSignal(int,int,int,int)
     send_hello_signal = pyqtSignal()
+    set_device_id_signal = pyqtSignal(int)
     read_measurement_signal = pyqtSignal(int,int,int)
-
-    device_id = 1 # TODO: from dropdown
+    read_setting_signal = pyqtSignal(int,int,int)
+    read_override_signal = pyqtSignal(int,int,int)
     
     def __init__(self):
         QWidget.__init__(self, flags=Qt.Widget)
 
-        self.state = 0
+        self.can_state = 0
+        self.device_state = DEVICE_STATE_DISCONNECTED
         self.read_measurement_index = 0
+        self.read_setting_index = 0
+        self.read_override_index = 0
+        self.device_id = -1
 
         self.measurements = {}
         self.overrides = {}
@@ -242,14 +309,24 @@ class Form(QWidget):
         self.can_thread = CANThread()
         
         self.can_thread.update_measurement_signal.connect(self.updateMeasurement)
+        self.can_thread.update_setting_signal.connect(self.updateSetting)
+        self.can_thread.update_override_signal.connect(self.updateOverride)
+        self.can_thread.update_hello_signal.connect(self.updateDeviceList)
         self.can_thread.send_status_signal.connect(self.handleCANStatus)
         
         self.set_setting_signal.connect(self.can_thread.setSetting)
         self.set_override_signal.connect(self.can_thread.setOverride)
         self.send_hello_signal.connect(self.can_thread.sendHello)
+        self.set_device_id_signal.connect(self.can_thread.setDeviceId)
         self.read_measurement_signal.connect(self.can_thread.readMeasurement)
+        self.read_setting_signal.connect(self.can_thread.readSetting)
+        self.read_override_signal.connect(self.can_thread.readOverride)
 
         self.can_thread.start()
+
+        timer = QTimer(self) 
+        timer.timeout.connect(self.tick) 
+        timer.start(100)
         
     def init_widget(self):
         self.setWindowTitle("VSCCP GUI")
@@ -276,17 +353,19 @@ class Form(QWidget):
         self.combo_rate.addItem("1M")
         self.combo_rate.addItem("125k")
 
-        self.btn_connect = QPushButton("Connect")
+        self.btn_connect = QPushButton("Open")
         self.btn_connect.clicked.connect(self.connect)
-
-        self.btn_hello = QPushButton("Scan for targets")
-        self.btn_hello.clicked.connect(self.sendHello)
 
         self.btn_open = QPushButton("Open Cal CSV")
         self.btn_open.clicked.connect(self.openFileNameDialog)
 
-        self.btn_read_measurement = QPushButton("Read Measurement")
-        self.btn_read_measurement.clicked.connect(self.readMeasurement)
+        self.btn_hello = QPushButton("Scan for targets")
+        self.btn_hello.clicked.connect(self.sendHello)
+
+        self.combo_devices = QComboBox()
+
+        self.btn_device_connect = QPushButton("Connect")
+        self.btn_device_connect.clicked.connect(self.deviceConnect)
         
         self.lbl_status = QLabel("")
 
@@ -300,8 +379,11 @@ class Form(QWidget):
         row += 1
 
         grid.addWidget(self.btn_open, row, 0)
-        grid.addWidget(self.btn_hello, row, 1)
-        grid.addWidget(self.btn_read_measurement, row, 2)
+        row += 1
+        
+        grid.addWidget(self.btn_hello, row, 0)
+        grid.addWidget(self.combo_devices, row, 1)
+        grid.addWidget(self.btn_device_connect, row, 2)
         row += 1
 
 
@@ -431,8 +513,36 @@ class Form(QWidget):
         self.measurements_table.item(table_index, 1).setText(str(value))
         print("Set measurement "+str(var_start)+" to "+str(value))
 
+    @pyqtSlot(int,int,int)
+    def updateSetting(self, var_start, var_len, value):
+        table_index = self.settings[var_start].index
+        self.settings_table.item(table_index, 1).setText(str(value))
+        print("Set setting "+str(var_start)+" to "+str(value))
+
+    @pyqtSlot(int,int,int,int)
+    def updateOverride(self, overridden, var_start, var_len, value):
+        table_index = self.overrides[var_start].index
+        self.overrides_table.item(table_index, 1).setText(str(value))
+        print("Set override "+str(var_start)+" to "+str(overridden)+" value "+str(value))
+
+    @pyqtSlot(int)
+    def updateDeviceList(self, device_id):
+        self.combo_devices.addItem(str(device_id))
+
     def sendHello(self):
+        self.combo_devices.clear()
         self.send_hello_signal.emit()
+
+    def deviceConnect(self):
+        device_id = int(self.combo_devices.currentText())
+        if device_id != None and device_id != "":
+            self.device_id = device_id
+            self.set_device_id_signal.emit(device_id)
+
+            self.read_measurement_index = 0
+            self.read_setting_index = 0
+            self.read_override_index = 0
+            self.device_state = DEVICE_STATE_READING_SETTINGS
 
     def readMeasurement(self):
         measurement_key = [*self.measurements][self.read_measurement_index]
@@ -443,9 +553,62 @@ class Form(QWidget):
         
         self.read_measurement_signal.emit(self.device_id, var_start, var_len)
 
-        self.read_measurement_index += 1
-        if self.read_measurement_index >= self.num_measurements:
-            self.read_measurement_index = 0
+    def readSetting(self):
+        setting_key = [*self.settings][self.read_setting_index]
+        setting = self.settings[setting_key]
+        
+        var_start = setting.offset
+        var_len = lengths[setting.cal_type]
+        
+        self.read_setting_signal.emit(self.device_id, var_start, var_len)
+        # TODO: can get rid of device id in these calls
+
+    def readOverride(self):
+        override_key = [*self.overrides][self.read_override_index]
+        override = self.overrides[override_key]
+        
+        var_start = override.offset
+        var_len = lengths[override.cal_type]
+        
+        self.read_override_signal.emit(self.device_id, var_start, var_len)
+
+    def tick(self):
+        if self.device_state == DEVICE_STATE_DISCONNECTED:
+            pass
+        
+        elif self.device_state == DEVICE_STATE_READING_SETTINGS:
+            self.lbl_status.setText("Reading setting "+str(self.read_setting_index+1)+"/"+str(self.num_settings))
+            
+            self.readSetting()
+
+            self.read_setting_index += 1
+            if self.read_setting_index >= self.num_settings:
+                self.device_state = DEVICE_STATE_READING_OVERRIDES
+                self.read_setting_index = 0
+                
+        elif self.device_state == DEVICE_STATE_READING_OVERRIDES:
+            self.lbl_status.setText("Reading override "+str(self.read_override_index+1)+"/"+str(self.num_overrides))
+            
+            self.readOverride()
+
+            self.read_override_index += 1
+            if self.read_override_index >= self.num_overrides:
+                self.device_state = DEVICE_STATE_READING_MEASUREMENTS
+                self.read_overrides_index = 0
+        
+        elif self.device_state == DEVICE_STATE_READING_MEASUREMENTS:
+            self.lbl_status.setText("Reading measurement "+str(self.read_measurement_index+1)+"/"+str(self.num_measurements))
+            
+            self.readMeasurement()
+
+            self.read_measurement_index += 1
+            if self.read_measurement_index >= self.num_measurements:
+                self.device_state = DEVICE_STATE_CONNECTED
+                self.lbl_status.setText("Connected to device ID "+str(self.device_id))
+                self.read_measurement_index = 0
+            
+        elif self.device_state == DEVICE_STATE_CONNECTED:
+            pass
 
     def connect(self):
         bustype = self.combo_bustype.currentText()
@@ -467,10 +630,10 @@ class Form(QWidget):
         elif bitrate == "1M":
             bitrate = 1000000
 
-        if self.state == 0:
+        if self.can_state == 0:
             self.lbl_status.setText("Connecting...")
             self.can_thread.connect(bustype, interface, bitrate)
-        elif self.state == 1:
+        elif self.can_state == 1:
             self.lbl_status.setText("Disconnecting...")
             self.can_thread.disconnect()
 
@@ -478,21 +641,22 @@ class Form(QWidget):
     def handleCANStatus(self, status):
         if status == 1:
             self.lbl_status.setText("Failed to find CAN device")
-            self.state = 0
+            self.can_state = 0
         if status == 0:
             self.lbl_status.setText("CAN device connected")
             self.btn_connect.setText("Disconnect")
-            self.state = 1
+            self.can_state = 1
 
             self.combo_rate.setEnabled(False)
             self.combo_bustype.setEnabled(False)
         if status == 2:
             self.lbl_status.setText("CAN device disconnected")
             self.btn_connect.setText("Connect")
-            self.state = 0
+            self.can_state = 0
             
             self.combo_rate.setEnabled(True)
             self.combo_bustype.setEnabled(True)
+            # TODO: add more buttons here
 
 
 
