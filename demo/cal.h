@@ -3,38 +3,37 @@
 
 #include "yacp.h"
 
-// Struct defs
-
 typedef struct __attribute__((packed)) cal_measurements
 {
-  uint16_t test_var; // 2
-  uint8_t cal_ver; // 3
-  uint32_t test_var2; // 7
-  uint8_t output_status; // 8
-  uint16_t counter; // 10
+	uint16_t test_var;
+	uint8_t cal_ver;
+	uint32_t test_var2;
+	uint8_t output_status;
+	uint16_t counter;
 } cal_measurements;
 
 typedef struct __attribute__((packed)) cal_settings
 {
-  uint8_t output_selector; // 1
-  uint32_t test3; // 5
-  uint8_t test1; // 6
-  uint16_t test2; // 8
+	uint8_t build_number;
+	uint8_t output_selector;
+	uint32_t test3;
+	uint8_t test1;
+	uint16_t test2;
 } cal_settings;
 
 typedef struct __attribute__((packed)) cal_overrides
 {
-  cal_override output_override;   // 5
-  cal_override output_override2;  // 10
-  cal_override output_override3;  // 15
-  cal_override output_override4;  // 20
+	cal_override output_override;
+	cal_override output_override2;
+	cal_override output_override3;
+	cal_override output_override4;
 } cal_overrides;
 
 typedef struct calibration
 {
-  cal_measurements measurements;
-  cal_settings settings;
-  cal_overrides overrides;
+	cal_measurements measurements;
+	cal_settings settings;
+	cal_overrides overrides;
 } calibration;
 
 #endif

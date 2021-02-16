@@ -1,0 +1,69 @@
+{
+	"measurements": [
+		{
+			"name": "test_var",
+			"type": "uint16"
+		},
+		{
+			"name": "cal_ver",
+			"type": "uint8"
+		},
+		{
+			"name": "test_var2",
+			"type": "uint32"
+		},
+		{
+			"name": "output_status",
+			"type": "uint8"
+		},
+		{
+			"name": "counter",
+			"type": "uint16"
+		}
+	],
+	"settings": [
+		{
+			"name": "build_number",
+			"type": "uint8",
+			"default": "10"
+		},
+		{
+			"name": "output_selector",
+			"type": "uint8",
+			"default": "0"
+		},
+		{
+			"name": "test3",
+			"type": "uint32",
+			"default": "3"
+		},
+		{
+			"name": "test1",
+			"type": "uint8",
+			"default": "2"
+		},
+		{
+			"name": "test2",
+			"type": "uint16",
+			"default": "1"
+		}
+	],
+	"overrides": [
+		{
+			"name": "output_override",
+			"type": "uint16"
+		},
+		{
+			"name": "output_override2",
+			"type": "uint8"
+		},
+		{
+			"name": "output_override3",
+			"type": "uint8"
+		},
+		{
+			"name": "output_override4",
+			"type": "uint16"
+		}
+	]
+}

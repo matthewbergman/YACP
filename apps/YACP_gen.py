@@ -1,4 +1,5 @@
-import csv
+import json
+import sys
 
 lengths = {}
 lengths["uint8"] = 1
@@ -28,8 +29,8 @@ def measurements_start():
     hfile.write("typedef struct __attribute__((packed)) cal_measurements\n")
     hfile.write("{\n")
 
-def measurements_var(role,name,cal_type):
-    hfile.write(types_c[cal_type]+" "+name+";\n")
+def measurements_var(name,cal_type):
+    hfile.write("\t"+types_c[cal_type]+" "+name+";\n")
 
 def measurements_end():
     hfile.write("} cal_measurements;\n\n")
@@ -39,8 +40,8 @@ def settings_start():
     hfile.write("typedef struct __attribute__((packed)) cal_settings\n")
     hfile.write("{\n")
 
-def settings_var(role,name,cal_type):
-    hfile.write(types_c[cal_type]+" "+name+";\n")
+def settings_var(name,cal_type):
+    hfile.write("\t"+types_c[cal_type]+" "+name+";\n")
 
 def settings_end():
     hfile.write("} cal_settings;\n\n")
@@ -50,8 +51,8 @@ def override_start():
     hfile.write("typedef struct __attribute__((packed)) cal_overrides\n")
     hfile.write("{\n")
 
-def override_var(role,name,cal_type):
-    hfile.write("cal_override "+name+";\n")
+def override_var(name):
+    hfile.write("\tcal_override "+name+";\n")
 
 def override_end():
     hfile.write("} cal_overrides;\n\n")
@@ -60,67 +61,53 @@ def override_end():
 def header_end():
     hfile.write("typedef struct calibration\n")
     hfile.write("{\n")
-    hfile.write("  cal_measurements measurements;\n")
-    hfile.write("  cal_settings settings;\n")
-    hfile.write("  cal_overrides overrides;\n")
+    hfile.write("\tcal_measurements measurements;\n")
+    hfile.write("\tcal_settings settings;\n")
+    hfile.write("\tcal_overrides overrides;\n")
     hfile.write("} calibration;\n\n")
     hfile.write("#endif\n")
 
 
+if len(sys.argv) != 2:
+    print("Usage: YACP_gen.py ./path/to/project-def.json")
+    sys.exit(1)
+    
+def_filename = sys.argv[1]
+
+try:
+    hfile = open('cal.h','w')
+except:
+    print("Failed to open cal.h for writing!")
+    sys.exit(1)
+
+try:
+    def_file = open(def_filename, 'r')
+except:
+    print("Failed to open "+def_filename+" for reading!")
+    sys.exit(1)
+
+defs = json.load(def_file)
 
 
-hfile = open('cal.h','w')
 
 header_start()
 
-measurements = []
-settings = []
-overrides = []
-with open('vsccp.csv', newline='\n') as csvfile:
-    reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-    first = True
-    for row in reader:
-        if first:
-            first = False
-            continue
-        
-        role = row[0]
-
-        if role.strip().lower() == "measurement":
-            measurements.append(row)
-        elif role.strip().lower() == "setting":
-            settings.append(row)
-        elif role.strip().lower() == "override":
-            overrides.append(row)
-
 measurements_start()
-for row in measurements:
-    name = row[1]
-    cal_type = row[2]
-    default_value = row[3]
-    value = row[4]
-    measurements_var(role,name,cal_type)
+for measurement in defs["measurements"]:
+    measurements_var(measurement["name"], measurement["type"])
 measurements_end()
 
 settings_start()
-for row in settings:
-    name = row[1]
-    cal_type = row[2]
-    default_value = row[3]
-    value = row[4]
-    settings_var(role,name,cal_type)
+for setting in defs["settings"]:
+    settings_var(setting["name"], setting["type"])
 settings_end()
 
 override_start()
-for row in overrides:
-    name = row[1]
-    cal_type = row[2]
-    default_value = row[3]
-    value = row[4]
-    settings_var(role,name,cal_type)
+for override in defs["overrides"]:
+    override_var(override["name"])
 override_end()
 
 header_end()
         
-csvfile.close()
+def_file.close()
 hfile.close()

@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define DEVICE_ID 1 // TODO: should be EEPROM
-
 #define SSCCP_COMMAND_ID 0x100
 #define SSCCP_UPDATE_ID 0x101
 
@@ -39,12 +37,16 @@ typedef struct __attribute__((packed)) cal_override
 
 // Functions
 
-void send_can(uint32_t id, uint8_t* buf);
+// Drivers
+void can_start();
+void can_send(uint32_t id, uint8_t* buf);
+void can_recv();
+uint8_t eeprom_load_byte(uint16_t addr);
+void eeprom_store_byte(uint16_t addr, uint8_t val);
+
+// Internal
 void load_settings();
 void save_settings();
-
-void send_measurement(uint16_t measurement_start, uint8_t var_len);
-void send_setting(uint16_t setting_start, uint8_t var_len);
 void handle_can(uint32_t id, uint8_t* buf);
-void send_hello();
+
 #endif

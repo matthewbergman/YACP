@@ -2,6 +2,7 @@ import can
 import time
 import sys
 import csv
+import json
 
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QBoxLayout
@@ -34,8 +35,8 @@ lengths["uint8"] = 1
 lengths["int8"] = 1
 lengths["uint16"] = 2
 lengths["int16"] = 2
-lengths["uint32"] = 2
-lengths["int32"] = 2
+lengths["uint32"] = 4
+lengths["int32"] = 4
 lengths["float"] = 4
 
 SSCCP_COMMAND_ID = 0x100
@@ -329,7 +330,7 @@ class Form(QWidget):
         timer.start(100)
         
     def init_widget(self):
-        self.setWindowTitle("VSCCP GUI")
+        self.setWindowTitle("YACP Cal")
         form_lbx = QBoxLayout(QBoxLayout.LeftToRight, parent=self)
         self.setLayout(form_lbx)
 
@@ -356,7 +357,7 @@ class Form(QWidget):
         self.btn_connect = QPushButton("Open")
         self.btn_connect.clicked.connect(self.connect)
 
-        self.btn_open = QPushButton("Open Cal CSV")
+        self.btn_open = QPushButton("Open Def")
         self.btn_open.clicked.connect(self.openFileNameDialog)
 
         self.btn_hello = QPushButton("Scan for targets")
@@ -475,36 +476,33 @@ class Form(QWidget):
     def openFileNameDialog(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self,"Open Cal CSV", "","Cal Files (*.csv)", options=options)
+        fileName, _ = QFileDialog.getOpenFileName(self,"Open build def", "","Def Files (*.json)", options=options)
         if fileName:
-            with open(fileName, newline='\n') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+            with open(fileName, newline='\n') as def_file:
+                defs = json.load(def_file)
+
                 measurement_offset = 0
                 override_offset = 0
                 setting_offset = 0
-                
-                for row in reader:                
-                    role = row[0]
-                    name = row[1]
-                    cal_type = row[2]
-                    default_value = row[3]
-                    value = row[4]
 
-                    if role.strip().lower() == 'measurement':
-                        measurement = Measurement(name, cal_type, measurement_offset, self.num_measurements)
-                        self.measurements[measurement_offset] = measurement
-                        measurement_offset += lengths[cal_type]
-                        self.num_measurements += 1
-                    elif role.strip().lower() == 'setting':
-                        setting = Setting(name, value, cal_type, default_value, setting_offset, self.num_settings)
-                        self.settings[setting_offset] = setting
-                        setting_offset += lengths[cal_type]
-                        self.num_settings += 1
-                    elif role.strip().lower() == 'override':
-                        override = Override(name, cal_type, override_offset, self.num_overrides)
-                        self.overrides[override_offset] = override
-                        override_offset += lengths[cal_type]
-                        self.num_overrides += 1
+                for m in defs["measurements"]:
+                    measurement = Measurement(m["name"], m["type"], measurement_offset, self.num_measurements)
+                    self.measurements[measurement_offset] = measurement
+                    measurement_offset += lengths[m["type"]]
+                    self.num_measurements += 1
+                
+                for s in defs["settings"]:
+                    setting = Setting(s["name"], 0, s["type"], s["default"], setting_offset, self.num_settings)
+                    self.settings[setting_offset] = setting
+                    setting_offset += lengths[s["type"]]
+                    self.num_settings += 1
+
+                for o in defs["overrides"]:
+                    override = Override(o["name"], o["type"], override_offset, self.num_overrides)
+                    self.overrides[override_offset] = override
+                    override_offset += 4
+                    self.num_overrides += 1
+                    
             self.update_widgets()
 
     @pyqtSlot(int,int,int)
