@@ -14,6 +14,7 @@
 #define CAL_READ_MEASUREMENT 5
 #define CAL_SAVE_SETTINGS 6
 #define CAL_HELLO 7
+#define CAL_ACK 8
 
 #define CAL_PASSTHRU 0
 #define CAL_OVERRIDDEN 1

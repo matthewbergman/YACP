@@ -61,6 +61,25 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
  can_send(SSCCP_UPDATE_ID, buf);
 }
 
+void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len)
+{
+  uint8_t buf[8];
+
+  buf[0] = message_type | (my_device_id << 4);
+  buf[1] = override_start;
+  buf[2] = override_start >> 8;
+  buf[3] = var_len;
+
+  buf[4] = 0;
+  buf[5] = 0;
+  buf[6] = 0;
+  buf[7] = 0;
+
+  memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
+    
+ can_send(SSCCP_UPDATE_ID, buf);
+}
+
 void send_hello()
 {
   uint8_t buf[8];
@@ -70,6 +89,22 @@ void send_hello()
   buf[2] = 0;
   buf[3] = 0;
   buf[4] = 0;
+  buf[5] = 0;
+  buf[6] = 0;
+  buf[7] = 0;
+    
+  can_send(SSCCP_UPDATE_ID, buf);
+}
+
+void send_ack()
+{
+  uint8_t buf[8];
+
+  buf[0] = CAL_ACK | (my_device_id << 4);
+  buf[1] = 0;
+  buf[2] = 0;
+  buf[3] = 0;
+  buf[4] = 1;
   buf[5] = 0;
   buf[6] = 0;
   buf[7] = 0;
@@ -116,7 +151,7 @@ void handle_can(uint32_t id, uint8_t* buf)
       if (message_type == CAL_UPDATE_SETTING)
       {
         memcpy((uint8_t*)&cal.settings + var_start, &value, var_len);
-        send_setting(var_start, var_len);
+        send_ack();
       }
       else if (message_type == CAL_READ_SETTING)
       {
@@ -131,11 +166,14 @@ void handle_can(uint32_t id, uint8_t* buf)
           
         memcpy((uint8_t*)&cal.overrides + var_start + 1, &value, 4);
 
-        // TODO: send cal_read_override message
+        send_ack();
       }
       else if (message_type == CAL_READ_OVERRIDE)
       {
-        // TODO: send cal_read_override message
+        if (*((uint8_t*)&cal.overrides + var_start) == CAL_PASSTHRU)
+          send_override(CAL_OVERRIDE_OFF, var_start, var_len);
+        else
+          send_override(CAL_OVERRIDE_ON, var_start, var_len);
       }
       else if (message_type == CAL_READ_MEASUREMENT)
       {
@@ -144,7 +182,8 @@ void handle_can(uint32_t id, uint8_t* buf)
       else if (message_type == CAL_SAVE_SETTINGS)
       {
         save_settings();
-        // TODO: send save_settings message
+        
+        send_ack();
       }
       
       break;
