@@ -1,25 +1,20 @@
-#include "yacp.h"
 #include "cal.h"
+#include "yacp.h"
 
 #include <arduino.h> // TODO: remove
 
 #include <string.h>
 
+extern calibration cal;
+
 // Internal functions
 
 void send_measurement(uint16_t measurement_start, uint8_t var_len);
 void send_setting(uint16_t setting_start, uint8_t var_len);
+void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len);
 void send_hello();
-
+void send_ack();
 uint32_t eeprom_crc();
-
-// External data
-
-extern calibration cal;
-
-// Local data
-
-uint8_t my_device_id;
 
 // Functions
 
@@ -27,7 +22,7 @@ void send_measurement(uint16_t measurement_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
-  buf[0] = CAL_READ_MEASUREMENT | (my_device_id << 4);
+  buf[0] = CAL_READ_MEASUREMENT | (cal.settings.device_id << 4);
   buf[1] = measurement_start;
   buf[2] = measurement_start >> 8;
   buf[3] = var_len;
@@ -46,7 +41,7 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
-  buf[0] = CAL_READ_SETTING | (my_device_id << 4);
+  buf[0] = CAL_READ_SETTING | (cal.settings.device_id << 4);
   buf[1] = setting_start;
   buf[2] = setting_start >> 8;
   buf[3] = var_len;
@@ -65,7 +60,7 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
 {
   uint8_t buf[8];
 
-  buf[0] = message_type | (my_device_id << 4);
+  buf[0] = message_type | (cal.settings.device_id << 4);
   buf[1] = override_start;
   buf[2] = override_start >> 8;
   buf[3] = var_len;
@@ -84,7 +79,7 @@ void send_hello()
 {
   uint8_t buf[8];
 
-  buf[0] = CAL_HELLO | (my_device_id << 4);
+  buf[0] = CAL_HELLO | (cal.settings.device_id << 4);
   buf[1] = 0;
   buf[2] = 0;
   buf[3] = 0;
@@ -100,7 +95,7 @@ void send_ack()
 {
   uint8_t buf[8];
 
-  buf[0] = CAL_ACK | (my_device_id << 4);
+  buf[0] = CAL_ACK | (cal.settings.device_id << 4);
   buf[1] = 0;
   buf[2] = 0;
   buf[3] = 0;
@@ -145,7 +140,7 @@ void handle_can(uint32_t id, uint8_t* buf)
         send_hello();
       }
 
-      if (device_id != my_device_id)
+      if (device_id != cal.settings.device_id)
         break;
 
       if (message_type == CAL_UPDATE_SETTING)
@@ -190,8 +185,14 @@ void handle_can(uint32_t id, uint8_t* buf)
   }
 }
 
-void load_settings()
+void yacp_init()
 {
+  load_defaults();
+  load_settings();
+}
+
+void load_settings()
+{  
   uint32_t stored_checksum = 0;
   stored_checksum |= (uint32_t)eeprom_load_byte(0);
   stored_checksum |= (uint32_t)eeprom_load_byte(1) << 8;
@@ -206,8 +207,6 @@ void load_settings()
     Serial.print(stored_checksum);
     Serial.print(" actual ");
     Serial.println(calculated_checksum);
-
-    // make sure defaults are loaded before this point, generated code
     
     return;
   }
@@ -219,6 +218,18 @@ void load_settings()
   for (size_t i=0; i<sizeof(cal); i++)
   {
     cal_ptr[i] = eeprom_load_byte(i + 4);
+  }
+
+  if (CAL_REVISION != cal.settings.revision)
+  {
+    Serial.print("REV ");
+    Serial.print(cal.settings.revision);
+    Serial.print(" expected ");
+    Serial.println(CAL_REVISION);
+
+    memset(&cal.settings, 0, sizeof(cal.settings));
+    load_defaults();
+    save_settings();
   }
 }
 
@@ -252,8 +263,9 @@ uint32_t eeprom_crc()
   uint32_t crc = ~0L;
   uint8_t val;
   
-  for (int index = 0; index < sizeof(cal.settings); ++index) 
+  for (uint16_t index = 0; index < sizeof(cal.settings); ++index) 
   {
+    // TODO: make a define for cal EEPROM address start
     val = eeprom_load_byte(index + 4); // Add 4 to skip over the CRC value in the start of EEPROM
 
     Serial.println(val);

@@ -1,19 +1,21 @@
-#include "yacp.h"
-#include "cal.h"
 #include <stdint.h>
+#include <FlexCAN.h>
+
+#include "cal.h"
+
+extern calibration cal;
 
 // Vars
-calibration cal;
 unsigned long startup_counter;
 
 void setup() 
 {
-  can_start();
+  Can0.begin(500000);
   
   Serial.begin(115200);
   delay(500);
   
-  load_settings();
+  yacp_init();
 
   cal.measurements.cal_ver = 1;
 
@@ -39,7 +41,7 @@ void setup()
 
 void loop() 
 {
-  can_recv();
+  yacp_can_recv();
   
   if (cal.overrides.output_override.status == CAL_OVERRIDDEN)
   {

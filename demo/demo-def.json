@@ -23,9 +23,14 @@
 	],
 	"settings": [
 		{
-			"name": "build_number",
+			"name": "device_id",
 			"type": "uint8",
-			"default": "10"
+			"default": "1"
+		},
+		{
+			"name": "revision",
+			"type": "uint8",
+			"default": "2"
 		},
 		{
 			"name": "output_selector",

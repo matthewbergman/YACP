@@ -16,36 +16,9 @@
 #define CAL_HELLO 7
 #define CAL_ACK 8
 
-#define CAL_PASSTHRU 0
-#define CAL_OVERRIDDEN 1
 
-// Struct defs
-
-union cal_value
-{
-  uint8_t u8;
-  int8_t i8;
-  uint16_t u16;
-  int16_t i16;
-  float f;
-};
-
-typedef struct __attribute__((packed)) cal_override
-{
-  uint8_t status;
-  cal_value value;
-} cal_override;
-
-// Functions
-
-// Drivers
-void can_start();
-void can_send(uint32_t id, uint8_t* buf);
-void can_recv();
-uint8_t eeprom_load_byte(uint16_t addr);
-void eeprom_store_byte(uint16_t addr, uint8_t val);
-
-// Internal
+// YACP Internal Functions
+void load_defaults();
 void load_settings();
 void save_settings();
 void handle_can(uint32_t id, uint8_t* buf);

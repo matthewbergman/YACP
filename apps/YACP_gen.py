@@ -19,10 +19,11 @@ types_c["uint32"] = "uint32_t"
 types_c["int32"] = "int32_t"
 types_c["float"] = "float"
 
-def header_start():
+def header_start(rev):
     hfile.write("#ifndef YACP_CAL_H_\n")
     hfile.write("#define YACP_CAL_H_\n\n")
-    hfile.write("#include \"yacp.h\"\n\n")
+    hfile.write("#include \"yacp_api.h\"\n\n")
+    hfile.write("#define CAL_REVISION "+rev+"\n\n")
     
 
 def measurements_start():
@@ -67,18 +68,24 @@ def header_end():
     hfile.write("} calibration;\n\n")
     hfile.write("#endif\n")
 
+def impl_start():
+    cfile.write("#include \"cal.h\"\n\n")
+    cfile.write("calibration cal;\n\n")
+    cfile.write("void load_defaults()\n")
+    cfile.write("{\n")
+
+def impl_var(var,val):
+    cfile.write("\tcal.settings."+var+" = "+val+";\n")
+
+def impl_end():
+    cfile.write("}\n")
+
 
 if len(sys.argv) != 2:
     print("Usage: YACP_gen.py ./path/to/project-def.json")
     sys.exit(1)
     
 def_filename = sys.argv[1]
-
-try:
-    hfile = open('cal.h','w')
-except:
-    print("Failed to open cal.h for writing!")
-    sys.exit(1)
 
 try:
     def_file = open(def_filename, 'r')
@@ -88,9 +95,30 @@ except:
 
 defs = json.load(def_file)
 
+def_file.close()
+
+found_required_settings = 0
+rev = 0
+for setting in defs["settings"]:
+    if setting["name"] == "device_id":
+        found_required_settings += 1
+    if setting["name"] == "revision":
+        found_required_settings += 1
+        rev = setting["default"]
+        
+if found_required_settings != 2:
+    print("The settings section must include 'device_id' and 'revision'.")
+    sys.exit(1)
 
 
-header_start()
+try:
+    hfile = open('cal.h','w')
+except:
+    print("Failed to open cal.h for writing!")
+    sys.exit(1)
+    
+
+header_start(rev)
 
 measurements_start()
 for measurement in defs["measurements"]:
@@ -109,5 +137,18 @@ override_end()
 
 header_end()
         
-def_file.close()
 hfile.close()
+
+try:
+    cfile = open('cal.c','w')
+except:
+    print("Failed to open cal.c for writing!")
+    sys.exit(1)
+
+impl_start()
+for setting in defs["settings"]:
+    impl_var(setting["name"], setting["default"])
+impl_end()
+
+cfile.close()
+    

@@ -1,7 +1,9 @@
 #ifndef YACP_CAL_H_
 #define YACP_CAL_H_
 
-#include "yacp.h"
+#include "yacp_api.h"
+
+#define CAL_REVISION 2
 
 typedef struct __attribute__((packed)) cal_measurements
 {
@@ -14,7 +16,8 @@ typedef struct __attribute__((packed)) cal_measurements
 
 typedef struct __attribute__((packed)) cal_settings
 {
-	uint8_t build_number;
+	uint8_t device_id;
+	uint8_t revision;
 	uint8_t output_selector;
 	uint32_t test3;
 	uint8_t test1;

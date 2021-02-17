@@ -2,14 +2,10 @@
 #include <EEPROM.h>
 
 #include "yacp.h"
+#include "yacp_api.h"
 
 CAN_message_t can_out_msg;
 CAN_message_t can_in_msg;
-
-void can_start()
-{
-  Can0.begin(500000);
-}
 
 void can_send(uint32_t id, uint8_t* buf)
 {
@@ -22,7 +18,7 @@ void can_send(uint32_t id, uint8_t* buf)
   Can0.write(can_out_msg);
 }
 
-void can_recv()
+void yacp_can_recv()
 {
   while (Can0.available()) 
   {
