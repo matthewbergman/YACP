@@ -187,6 +187,20 @@ class CANThread(QThread):
             except:
                 print("Failed to send CAN message")
 
+    @pyqtSlot()
+    def sendSaveSettings(self):
+        msg_data = [0,0,0,0,0,0,0,0]
+        msg_id = SSCCP_COMMAND_ID
+
+        msg_data[0] = (self.device_id << 4) | CAL_SAVE_SETTINGS
+
+        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
+        if self.bus != None:
+            try:
+                self.bus.send(msg, 1)
+            except:
+                print("Failed to send CAN message")
+
     @pyqtSlot(int,int)
     def readMeasurement(self, var_start, var_len):
         msg_data = [0,0,0,0,0,0,0,0]
@@ -285,6 +299,7 @@ class Form(QMainWindow):
     set_setting_signal = pyqtSignal(int,int,int)
     set_override_signal = pyqtSignal(int,int,int,int)
     send_hello_signal = pyqtSignal()
+    save_settings_signal = pyqtSignal()
     set_device_id_signal = pyqtSignal(int)
     read_measurement_signal = pyqtSignal(int,int)
     read_setting_signal = pyqtSignal(int,int)
@@ -322,6 +337,7 @@ class Form(QMainWindow):
         self.set_setting_signal.connect(self.can_thread.setSetting)
         self.set_override_signal.connect(self.can_thread.setOverride)
         self.send_hello_signal.connect(self.can_thread.sendHello)
+        self.save_settings_signal.connect(self.can_thread.sendSaveSettings)
         self.set_device_id_signal.connect(self.can_thread.setDeviceId)
         self.read_measurement_signal.connect(self.can_thread.readMeasurement)
         self.read_setting_signal.connect(self.can_thread.readSetting)
@@ -389,6 +405,10 @@ class Form(QMainWindow):
         self.btn_device_connect.clicked.connect(self.deviceConnect)
         self.btn_device_connect.setEnabled(False)
 
+        self.btn_save = QPushButton("Save settings")
+        self.btn_save.clicked.connect(self.saveSettings)
+        self.btn_save.setEnabled(False)
+
         row = 0
         grid.addWidget(self.combo_bustype, row, 0)
         grid.addWidget(self.combo_rate, row, 1)
@@ -401,6 +421,9 @@ class Form(QMainWindow):
         grid.addWidget(self.btn_hello, row, 0)
         grid.addWidget(self.combo_devices, row, 1)
         grid.addWidget(self.btn_device_connect, row, 2)
+        row += 1
+
+        grid.addWidget(self.btn_save, row, 0)
         row += 1
 
 
@@ -547,6 +570,8 @@ class Form(QMainWindow):
                     self.overrides[override_offset] = override
                     override_offset += 4
                     self.num_overrides += 1
+
+                self.btn_hello.setEnabled(True)
                     
             self.update_widgets()
 
@@ -594,6 +619,8 @@ class Form(QMainWindow):
             self.read_override_index = 0
             self.device_state = DEVICE_STATE_READING_SETTINGS
 
+            self.btn_save.setEnabled(True)
+
     def readMeasurement(self):
         measurement_key = [*self.measurements][self.read_measurement_index]
         measurement = self.measurements[measurement_key]
@@ -620,6 +647,26 @@ class Form(QMainWindow):
         var_len = lengths[override.cal_type]
         
         self.read_override_signal.emit(var_start, var_len)
+
+    def saveSettings(self):
+        self.save_settings_signal.emit()
+        self.exportSettingsCSV()
+
+    def exportSettingsCSV(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getSaveFileName(self,"Cal Filename","","Cal Files (*.csv)", options=options)
+        if fileName:
+            with open(fileName, 'w', newline='') as csvfile:
+                spamwriter = csv.writer(csvfile, delimiter=',',quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                spamwriter.writerow(['Name','Value'])
+
+                for i in range(0, self.num_settings):
+                    setting_key = [*self.settings][i]
+                    setting = self.settings[setting_key]
+                    spamwriter.writerow([setting.name,setting.value])
+
+                self.statusBar().showMessage("Cal saved to "+fileName)
 
     def tick(self):
         if self.device_state == DEVICE_STATE_DISCONNECTED:
@@ -693,6 +740,7 @@ class Form(QMainWindow):
 
             self.btn_hello.setEnabled(False)
             self.btn_device_connect.setEnabled(False)
+            self.btn_save.setEnabled(False)
         if status == 0:
             self.statusBar().showMessage("CAN device connected")
             self.btn_connect.setText("Disconnect")
@@ -700,8 +748,6 @@ class Form(QMainWindow):
 
             self.combo_rate.setEnabled(False)
             self.combo_bustype.setEnabled(False)
-            
-            self.btn_hello.setEnabled(True)
         if status == 2:
             self.statusBar().showMessage("CAN device disconnected")
             self.btn_connect.setText("Connect")
@@ -712,6 +758,7 @@ class Form(QMainWindow):
             
             self.btn_hello.setEnabled(False)
             self.btn_device_connect.setEnabled(False)
+            self.btn_save.setEnabled(False)
 
 
 if __name__ == "__main__":

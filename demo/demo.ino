@@ -15,7 +15,6 @@ void setup()
   
   load_settings();
 
-  cal.settings.output_selector = 1;
   cal.measurements.cal_ver = 1;
 
   cal.measurements.test_var = 0xAA;
@@ -34,7 +33,6 @@ void setup()
 
   Serial.print("cal_overrides: ");
   Serial.println(sizeof(cal_overrides));
-
 
   startup_counter = millis() + 1000;
 }

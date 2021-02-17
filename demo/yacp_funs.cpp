@@ -192,7 +192,12 @@ void handle_can(uint32_t id, uint8_t* buf)
 
 void load_settings()
 {
-  uint32_t stored_checksum = eeprom_load_byte(0);
+  uint32_t stored_checksum = 0;
+  stored_checksum |= (uint32_t)eeprom_load_byte(0);
+  stored_checksum |= (uint32_t)eeprom_load_byte(1) << 8;
+  stored_checksum |= (uint32_t)eeprom_load_byte(2) << 16;
+  stored_checksum |= (uint32_t)eeprom_load_byte(3) << 24;
+  
   uint32_t calculated_checksum = eeprom_crc();
 
   if (stored_checksum != calculated_checksum)
@@ -201,6 +206,8 @@ void load_settings()
     Serial.print(stored_checksum);
     Serial.print(" actual ");
     Serial.println(calculated_checksum);
+
+    // make sure defaults are loaded before this point, generated code
     
     return;
   }
@@ -208,7 +215,7 @@ void load_settings()
   Serial.print("EEPROM CRC: ");
   Serial.println(calculated_checksum);
 
-  uint8_t* cal_ptr = (uint8_t*)&cal;
+  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
   for (size_t i=0; i<sizeof(cal); i++)
   {
     cal_ptr[i] = eeprom_load_byte(i + 4);
@@ -217,13 +224,18 @@ void load_settings()
 
 void save_settings()
 {
-  uint8_t* cal_ptr = (uint8_t*)&cal;
-  for (size_t i=0; i<sizeof(cal); i++)
+  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
+  for (size_t i=0; i<sizeof(cal.settings); i++)
   {
     eeprom_store_byte(i + 4, cal_ptr[i]);
   }
 
-  eeprom_store_byte(0, eeprom_crc());
+  uint32_t crc = eeprom_crc();
+
+  eeprom_store_byte(0, crc);
+  eeprom_store_byte(1, crc >> 8);
+  eeprom_store_byte(2, crc >> 16);
+  eeprom_store_byte(3, crc >> 24);
 }
 
 uint32_t eeprom_crc() 
@@ -240,9 +252,11 @@ uint32_t eeprom_crc()
   uint32_t crc = ~0L;
   uint8_t val;
   
-  for (int index = 0; index < sizeof(cal); ++index) 
+  for (int index = 0; index < sizeof(cal.settings); ++index) 
   {
     val = eeprom_load_byte(index + 4); // Add 4 to skip over the CRC value in the start of EEPROM
+
+    Serial.println(val);
     
     crc = crc_table[(crc ^ val) & 0x0f] ^ (crc >> 4);
     crc = crc_table[(crc ^ (val >> 4)) & 0x0f] ^ (crc >> 4);
