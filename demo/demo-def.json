@@ -30,7 +30,7 @@
 		{
 			"name": "revision",
 			"type": "uint8",
-			"default": "2"
+			"default": "3"
 		},
 		{
 			"name": "output_selector",
@@ -49,8 +49,8 @@
 		},
 		{
 			"name": "test2",
-			"type": "uint16",
-			"default": "1"
+			"type": "float",
+			"default": "1.5"
 		}
 	],
 	"overrides": [

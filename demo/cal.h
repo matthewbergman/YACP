@@ -3,7 +3,7 @@
 
 #include "yacp_api.h"
 
-#define CAL_REVISION 2
+#define CAL_REVISION 3
 
 typedef struct __attribute__((packed)) cal_measurements
 {
@@ -21,7 +21,7 @@ typedef struct __attribute__((packed)) cal_settings
 	uint8_t output_selector;
 	uint32_t test3;
 	uint8_t test1;
-	uint16_t test2;
+	float test2;
 } cal_settings;
 
 typedef struct __attribute__((packed)) cal_overrides

@@ -52,6 +52,7 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
   buf[7] = 0;
 
   memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
+  // TODO: are 32 bit ints backwards?
     
  can_send(SSCCP_UPDATE_ID, buf);
 }

@@ -3,6 +3,7 @@ import time
 import sys
 import csv
 import json
+import struct
 
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QMainWindow, QAction, qApp, QApplication
@@ -61,9 +62,9 @@ DEVICE_STATE_READING_MEASUREMENTS = 3
 DEVICE_STATE_CONNECTED = 4
 
 class CANThread(QThread):
-    update_measurement_signal = pyqtSignal(int,int,int)
-    update_setting_signal = pyqtSignal(int,int,int)
-    update_override_signal = pyqtSignal(int,int,int,int)
+    update_measurement_signal = pyqtSignal(int,int,int,int,int,int)
+    update_setting_signal = pyqtSignal(int,int,int,int,int,int)
+    update_override_signal = pyqtSignal(bool,int,int,int,int,int,int)
     update_hello_signal = pyqtSignal(int)
     send_status_signal = pyqtSignal(int)
     
@@ -97,19 +98,12 @@ class CANThread(QThread):
         while True:
             if self.bus != None:
                 for msg in self.bus:
-                    print(hex(msg.arbitration_id))
                     if msg.arbitration_id == SSCCP_UPDATE_ID:
                         device_id = msg.data[0] >> 4
                         message_type = msg.data[0] & 0x0F
                         var_start = msg.data[1]
                         var_start |= msg.data[2] << 8
                         var_len = msg.data[3]
-                        value = msg.data[4]
-                        value |= msg.data[5] << 8
-                        value |= msg.data[6] << 16
-                        value |= msg.data[7] << 24
-
-                        print("UPDATE from: "+str(device_id)+" type: "+str(message_type)+" start: "+str(var_start)+" len: "+str(var_len)+" value: "+str(value)) 
 
                         if message_type == CAL_HELLO:
                             self.update_hello_signal.emit(device_id)
@@ -118,20 +112,20 @@ class CANThread(QThread):
                             continue
 
                         if message_type == CAL_READ_MEASUREMENT:               
-                            self.update_measurement_signal.emit(var_start,var_len,value)
+                            self.update_measurement_signal.emit(var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
                         elif message_type == CAL_READ_SETTING:
-                            self.update_setting_signal.emit(var_start,var_len,value)
+                            self.update_setting_signal.emit(var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
                         elif message_type == CAL_OVERRIDE_ON:
-                            self.update_override_signal.emit(True,var_start,var_len,value)
+                            self.update_override_signal.emit(True,var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
                         elif message_type == CAL_OVERRIDE_OFF:
-                            self.update_override_signal.emit(False,var_start,var_len,value)
+                            self.update_override_signal.emit(False,var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
 
     @pyqtSlot(int)
     def setDeviceId(self, device_id):
         self.device_id = device_id
 
-    @pyqtSlot(int,int,int)
-    def setSetting(self, var_start, var_len, value):
+    @pyqtSlot(int,int,int,int,int,int)
+    def setSetting(self, var_start, var_len, b0,b1,b2,b3):
         msg_data = [0,0,0,0,0,0,0,0]
         msg_id = SSCCP_COMMAND_ID
 
@@ -139,20 +133,15 @@ class CANThread(QThread):
         msg_data[1] = var_start & 0xFF
         msg_data[2] = var_start >> 8
         msg_data[3] = var_len
-        msg_data[4] = value & 0xFF
-        msg_data[5] = (value >> 8) & 0xFF
-        msg_data[6] = (value >> 16) & 0xFF
-        msg_data[7] = (value >> 24) & 0xFF
+        msg_data[4] = b0
+        msg_data[5] = b1
+        msg_data[6] = b2
+        msg_data[7] = b3
 
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                print("Failed to send CAN message")
+        self.sendCANMessage(msg_id, msg_data)
 
-    @pyqtSlot(int,int,int,int)
-    def setOverride(self, enabled, var_start, var_len, value):
+    @pyqtSlot(int,int,int,int,int,int,int)
+    def setOverride(self, enabled, var_start, var_len, b0,b1,b2,b3):
         msg_data = [0,0,0,0,0,0,0,0]
         msg_id = SSCCP_COMMAND_ID
 
@@ -163,17 +152,12 @@ class CANThread(QThread):
         msg_data[1] = var_start & 0xFF
         msg_data[2] = var_start >> 8
         msg_data[3] = var_len
-        msg_data[4] = value & 0xFF
-        msg_data[5] = (value >> 8) & 0xFF
-        msg_data[6] = (value >> 16) & 0xFF
-        msg_data[7] = (value >> 24) & 0xFF
+        msg_data[4] = b0
+        msg_data[5] = b1
+        msg_data[6] = b2
+        msg_data[7] = b3
 
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                print("Failed to send CAN message")
+        self.sendCANMessage(msg_id, msg_data)
 
     @pyqtSlot()
     def sendHello(self):
@@ -194,12 +178,7 @@ class CANThread(QThread):
 
         msg_data[0] = (self.device_id << 4) | CAL_SAVE_SETTINGS
 
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                print("Failed to send CAN message")
+        self.sendCANMessage(msg_id, msg_data)
 
     @pyqtSlot(int,int)
     def readMeasurement(self, var_start, var_len):
@@ -215,12 +194,7 @@ class CANThread(QThread):
         msg_data[6] = 0
         msg_data[7] = 0
 
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                print("Failed to send CAN message")
+        self.sendCANMessage(msg_id, msg_data)
 
     @pyqtSlot(int,int)
     def readSetting(self, var_start, var_len):
@@ -236,12 +210,7 @@ class CANThread(QThread):
         msg_data[6] = 0
         msg_data[7] = 0
 
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                print("Failed to send CAN message")
+        self.sendCANMessage(msg_id, msg_data)
 
     @pyqtSlot(int,int)
     def readOverride(self, var_start, var_len):
@@ -257,6 +226,12 @@ class CANThread(QThread):
         msg_data[6] = 0
         msg_data[7] = 0
 
+        self.sendCANMessage(msg_id, msg_data)
+
+    def sendCANMessage(self, msg_id, msg_data):
+        if self.device_id == -1:
+            return
+        
         msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
         if self.bus != None:
             try:
@@ -296,8 +271,8 @@ class Override:
         self.index = index
 
 class Form(QMainWindow):
-    set_setting_signal = pyqtSignal(int,int,int)
-    set_override_signal = pyqtSignal(int,int,int,int)
+    set_setting_signal = pyqtSignal(int,int,int,int,int,int)
+    set_override_signal = pyqtSignal(int,int,int,int,int,int,int)
     send_hello_signal = pyqtSignal()
     save_settings_signal = pyqtSignal()
     set_device_id_signal = pyqtSignal(int)
@@ -392,8 +367,8 @@ class Form(QMainWindow):
         self.btn_connect = QPushButton("Open")
         self.btn_connect.clicked.connect(self.connect)
 
-        self.btn_open = QPushButton("Open Def")
-        self.btn_open.clicked.connect(self.openFileNameDialog)
+        self.btn_open = QPushButton("Load Def File")
+        self.btn_open.clicked.connect(self.loadDefFile)
 
         self.btn_hello = QPushButton("Scan for targets")
         self.btn_hello.clicked.connect(self.sendHello)
@@ -404,6 +379,10 @@ class Form(QMainWindow):
         self.btn_device_connect = QPushButton("Connect")
         self.btn_device_connect.clicked.connect(self.deviceConnect)
         self.btn_device_connect.setEnabled(False)
+
+        self.btn_load = QPushButton("Load settings")
+        self.btn_load.clicked.connect(self.loadSettings)
+        self.btn_load.setEnabled(False)
 
         self.btn_save = QPushButton("Save settings")
         self.btn_save.clicked.connect(self.saveSettings)
@@ -424,6 +403,7 @@ class Form(QMainWindow):
         row += 1
 
         grid.addWidget(self.btn_save, row, 0)
+        grid.addWidget(self.btn_load, row, 1)
         row += 1
 
 
@@ -512,10 +492,16 @@ class Form(QMainWindow):
         setting_key = [*self.settings][table_index]
         setting = self.settings[setting_key]
 
-        setting.value = int(self.settings_table.item(table_index, column).text())
-        print("Set "+str(table_index)+" to "+str(setting.value))
+        if setting.cal_type == 'float':
+            setting.value = float(self.settings_table.item(table_index, column).text())
+        else:
+            setting.value = int(self.settings_table.item(table_index, column).text())
 
-        self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], setting.value)
+        [b0,b1,b2,b3] = self.getBytesFromValue(setting.cal_type, setting.value)
+
+        self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
+            
+        print("Set "+str(table_index)+" to "+str(setting.value))
 
     def on_override_change(self, table_index, column):
         if column != 2:
@@ -523,8 +509,11 @@ class Form(QMainWindow):
 
         override_key = [*self.overrides][table_index]
         override = self.overrides[override_key]
-
-        override.value = int(self.overrides_table.item(table_index, 2).text())
+        
+        if override.cal_type == 'float':
+            override.value = float(self.overrides_table.item(table_index, 2).text())
+        else:
+            override.value = int(self.overrides_table.item(table_index, 2).text())
         print("Set "+str(table_index)+" to "+str(override.value))
 
         override.status = self.overrides_table.cellWidget(table_index, 1).currentText()
@@ -534,14 +523,16 @@ class Form(QMainWindow):
 
         print("Set "+str(table_index)+" status to "+str(enabled)+" "+override.status)
 
-        self.set_override_signal.emit(enabled, override.offset, lengths[override.cal_type], override.value)
+        [b0,b1,b2,b3] = self.getBytesFromValue(override.cal_type, override.value)
+
+        self.set_override_signal.emit(enabled, override.offset, lengths[override.cal_type], b0,b1,b2,b3)
 
     def on_override_status_change(self):
         combo = self.sender()
         table_index = combo.property('row')
         self.on_override_change(table_index, 2)
 
-    def openFileNameDialog(self):
+    def loadDefFile(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         fileName, _ = QFileDialog.getOpenFileName(self,"Open build def", "","Def Files (*.json)", options=options)
@@ -572,24 +563,78 @@ class Form(QMainWindow):
                     self.num_overrides += 1
 
                 self.btn_hello.setEnabled(True)
+                self.btn_load.setEnabled(True)
                     
             self.update_widgets()
 
-    @pyqtSlot(int,int,int)
-    def updateMeasurement(self, var_start, var_len, value):
+    def getValueFromBytes(self,cal_type,b0,b1,b2,b3):
+        if cal_type == "uint8":
+            [typed_value] = struct.unpack('>B',bytes([b0]))
+        elif cal_type == "int8":
+            [typed_value] = struct.unpack('>b',bytes([b0]))
+        elif cal_type == "uint16":
+            [typed_value] = struct.unpack('>H',bytes([b1,b0]))
+        elif cal_type == "int16":
+            [typed_value] = struct.unpack('>h',bytes([b1,b0]))
+        elif cal_type == "uint32":
+            [typed_value] = struct.unpack('>I',bytes([b3,b2,b1,b0]))
+        elif cal_type == "int16":
+            [typed_value] = struct.unpack('>i',bytes([b3,b2,b1,b0]))
+        elif cal_type == "float":
+            [typed_value] = struct.unpack('>f',bytes([b3,b2,b1,b0]))
+
+        print(str(b3)+" "+str(b2)+" "+str(b1)+" "+str(b0)+" = "+str(typed_value))
+            
+        return typed_value
+
+    def getBytesFromValue(self,cal_type,val):
+        if cal_type == "uint8":
+            bs = struct.pack('>B',val)
+        elif cal_type == "int8":
+            bs = struct.pack('>b',val)
+        elif cal_type == "uint16":
+            bs = struct.pack('>H',val)
+        elif cal_type == "int16":
+            bs = struct.pack('>h',val)
+        elif cal_type == "uint32":
+            bs = struct.pack('>I',val)
+        elif cal_type == "int32":
+            bs = struct.pack('>i',val)
+        elif cal_type == "float":
+            bs = struct.pack('>f',val)
+            # TODO: backwards byte order?
+            # 2.5 = [64, 32, 0, 0]
+
+        ints = list(bs)
+        ints += [0] * (4 - len(ints))
+
+        print(str(val)+" = "+str(ints[3])+" "+str(ints[2])+" "+str(ints[1])+" "+str(ints[0]))
+
+        return ints
+
+    @pyqtSlot(int,int,int,int,int,int)
+    def updateMeasurement(self, var_start, var_len, b0,b1,b2,b3):
         table_index = self.measurements[var_start].index
+        cal_type = self.measurements[var_start].cal_type
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)        
         self.measurements_table.item(table_index, 1).setText(str(value))
-        print("Set measurement "+str(var_start)+" to "+str(value))
+        
+        print("Set measurement "+self.measurements[var_start].name+" to "+str(value))
 
-    @pyqtSlot(int,int,int)
-    def updateSetting(self, var_start, var_len, value):
+    @pyqtSlot(int,int,int,int,int,int)
+    def updateSetting(self, var_start, var_len, b0,b1,b2,b3):
         table_index = self.settings[var_start].index
+        cal_type = self.settings[var_start].cal_type
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3) 
         self.settings_table.item(table_index, 1).setText(str(value))
-        print("Set setting "+str(var_start)+" to "+str(value))
+        
+        print("Set setting "+self.settings[var_start].name+" to "+str(value))
 
-    @pyqtSlot(int,int,int,int)
-    def updateOverride(self, overridden, var_start, var_len, value):
+    @pyqtSlot(bool,int,int,int,int,int,int)
+    def updateOverride(self, overridden, var_start, var_len, b0,b1,b2,b3):
         table_index = self.overrides[var_start].index
+        cal_type = self.overrides[var_start].cal_type
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3) 
         self.overrides_table.item(table_index, 2).setText(str(value))
 
         if overridden:
@@ -597,7 +642,7 @@ class Form(QMainWindow):
         else:
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Passthrough")
         
-        print("Set override "+str(var_start)+" to "+str(overridden)+" value "+str(value))
+        print("Set override "+self.overrides[var_start].name+" to "+str(overridden)+" value "+str(value))
 
     @pyqtSlot(int)
     def updateDeviceList(self, device_id):
@@ -655,18 +700,41 @@ class Form(QMainWindow):
     def exportSettingsCSV(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getSaveFileName(self,"Cal Filename","","Cal Files (*.csv)", options=options)
+        fileName, _ = QFileDialog.getSaveFileName(self,"Save Cal File","","Cal Files (*.csv)", options=options)
         if fileName:
             with open(fileName, 'w', newline='') as csvfile:
-                spamwriter = csv.writer(csvfile, delimiter=',',quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                spamwriter.writerow(['Name','Value'])
+                writer = csv.writer(csvfile, delimiter=',',quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(['Name','Value'])
 
                 for i in range(0, self.num_settings):
                     setting_key = [*self.settings][i]
                     setting = self.settings[setting_key]
-                    spamwriter.writerow([setting.name,setting.value])
+                    writer.writerow([setting.name,setting.value])
 
                 self.statusBar().showMessage("Cal saved to "+fileName)
+
+    def loadSettings(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(self,"Open Cal File","","Cal Files (*.csv)", options=options)
+        if fileName:
+            with open(fileName, newline='\n') as csvfile:
+                reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+                for row in reader:
+                    name = row[0]
+                    str_val = row[1]
+
+                    for offset in self.settings:
+                        if self.settings[offset].name != name:
+                            continue
+
+                        if self.settings[offset].cal_type == "float":
+                            self.settings[offset].value = float(str_val)
+                        else:
+                            self.settings[offset].value = int(str_val)
+                        table_index = self.settings[offset].index
+                        self.settings_table.item(table_index, 1).setText(str(val))
+
 
     def tick(self):
         if self.device_state == DEVICE_STATE_DISCONNECTED:
