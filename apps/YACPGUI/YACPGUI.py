@@ -4,9 +4,11 @@ import sys
 import csv
 import json
 import struct
+import configparser
+import os
 
 from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QMainWindow, QAction, qApp, QApplication
+from PyQt5.QtWidgets import QMainWindow, QAction, qApp, QApplication, QMenu
 from PyQt5.QtWidgets import QBoxLayout
 from PyQt5.QtWidgets import QGridLayout
 from PyQt5.QtWidgets import QLabel
@@ -71,6 +73,7 @@ class CANThread(QThread):
     def __init__(self):
         self.bus = None
         self.device_id = -1
+        self.stop = False
         
         QThread.__init__(self)
 
@@ -95,7 +98,7 @@ class CANThread(QThread):
 
     # run method gets called when we start the thread
     def run(self):
-        while True:
+        while self.stop == False:
             if self.bus != None:
                 for msg in self.bus:
                     if msg.arbitration_id == SSCCP_UPDATE_ID:
@@ -281,7 +284,6 @@ class Form(QMainWindow):
     read_override_signal = pyqtSignal(int,int)
     
     def __init__(self):
-        #QWidget.__init__(self, flags=Qt.Widget)
         super().__init__()
 
         self.can_state = 0
@@ -290,6 +292,7 @@ class Form(QMainWindow):
         self.read_setting_index = 0
         self.read_override_index = 0
         self.device_id = -1
+        self.projectPath = ""
 
         self.measurements = {}
         self.overrides = {}
@@ -298,6 +301,11 @@ class Form(QMainWindow):
         self.num_measurements = 0
         self.num_settings = 0
         self.num_overrides = 0
+
+        self.config = configparser.ConfigParser()
+        self.recentDefFiles = {}
+        self.recentCalFiles = {}
+        self.readConfig()
 	
         self.init_widget()
 
@@ -320,24 +328,85 @@ class Form(QMainWindow):
 
         self.can_thread.start()
 
-        timer = QTimer(self) 
-        timer.timeout.connect(self.tick) 
-        timer.start(100)
+        self.timer = QTimer(self) 
+        self.timer.timeout.connect(self.tick) 
+        self.timer.start(10)
 
         self.show()
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        self.can_thread.disconnect()
+        self.can_thread.stop = True
+        self.saveConfig()
+        self.can_thread.wait()
+
+    def readConfig(self):
+        inifile = self.config.read('yacp.ini')
+
+        if len(inifile) == 0:
+            self.config['YACP'] = {'CANAdaptor': 'PCAN', 'CANBAUD': '500'}
+            self.config['RecentCals'] = {}
+            self.config['RecentDefs'] = {}
+            self.saveConfig()
+            return
+
+        for file, path in self.config.items("RecentDefs"):
+            self.recentDefFiles[file] = path
+
+        for file, path in self.config.items("RecentCals"):
+            self.recentCalFiles[file] = path
+
+        # TODO: load CAN settigns
+
+    def saveConfig(self):
+        with open('yacp.ini', 'w') as configfile:
+            self.config.write(configfile)
+            configfile.close()
         
     def init_widget(self):
         self.setWindowTitle("YACP Cal")
         self.statusBar().showMessage('Disconnected')
 
-        exitAct = QAction(QIcon('exit.png'), '&Exit', self)
-        exitAct.setShortcut('Ctrl+Q')
-        exitAct.setStatusTip('Exit application')
-        exitAct.triggered.connect(qApp.quit)
 
         menubar = self.menuBar()
+        
         fileMenu = menubar.addMenu('&File')
-        fileMenu.addAction(exitAct)
+        recentDefMenu = QMenu('Recent Defs...', self)
+        self.recentCalMenu = QMenu('Recent Cals...', self)
+        self.recentCalMenu.setEnabled(False)
+
+        self.defOpenAct = QAction(QIcon('open.png'), '&Open Def', self)
+        self.defOpenAct.setShortcut('Ctrl+D')
+        self.defOpenAct.setStatusTip('Open Def file')
+        self.defOpenAct.triggered.connect(self.loadDefFileDialog)
+
+        self.calOpenAct = QAction(QIcon('open.png'), '&Open Cal', self)
+        self.calOpenAct.setShortcut('Ctrl+C')
+        self.calOpenAct.setStatusTip('Open Cal file')
+        self.calOpenAct.triggered.connect(self.loadCalFileDialog)
+        self.calOpenAct.setEnabled(False)
+
+
+        for calFile in self.recentCalFiles.keys():
+            recentOpenAct = QAction(calFile, self)
+            recentOpenAct.triggered.connect(lambda: self.loadCalFile(self.recentCalFiles[calFile]))
+            self.recentCalMenu.addAction(recentOpenAct)
+
+        for defFile in self.recentDefFiles.keys():
+            recentOpenAct = QAction(defFile, self)
+            recentOpenAct.triggered.connect(lambda: self.loadDefFile(self.recentDefFiles[defFile]))
+            recentDefMenu.addAction(recentOpenAct)
+        
+
+        fileMenu.addAction(self.defOpenAct)
+        fileMenu.addAction(self.calOpenAct)
+        fileMenu.addMenu(recentDefMenu)
+        fileMenu.addMenu(self.recentCalMenu)
+        
+        
+        
+        
         
         form_lbx = QBoxLayout(QBoxLayout.LeftToRight, parent=self)
         main_frame = QFrame(self)
@@ -367,9 +436,6 @@ class Form(QMainWindow):
         self.btn_connect = QPushButton("Open")
         self.btn_connect.clicked.connect(self.connect)
 
-        self.btn_open = QPushButton("Load Def File")
-        self.btn_open.clicked.connect(self.loadDefFile)
-
         self.btn_hello = QPushButton("Scan for targets")
         self.btn_hello.clicked.connect(self.sendHello)
         self.btn_hello.setEnabled(False)
@@ -380,11 +446,7 @@ class Form(QMainWindow):
         self.btn_device_connect.clicked.connect(self.deviceConnect)
         self.btn_device_connect.setEnabled(False)
 
-        self.btn_load = QPushButton("Load settings")
-        self.btn_load.clicked.connect(self.loadSettings)
-        self.btn_load.setEnabled(False)
-
-        self.btn_save = QPushButton("Save settings")
+        self.btn_save = QPushButton("Push and Save Cal")
         self.btn_save.clicked.connect(self.saveSettings)
         self.btn_save.setEnabled(False)
 
@@ -393,9 +455,6 @@ class Form(QMainWindow):
         grid.addWidget(self.combo_rate, row, 1)
         grid.addWidget(self.btn_connect, row, 2)
         row += 1
-
-        grid.addWidget(self.btn_open, row, 0)
-        row += 1
         
         grid.addWidget(self.btn_hello, row, 0)
         grid.addWidget(self.combo_devices, row, 1)
@@ -403,7 +462,6 @@ class Form(QMainWindow):
         row += 1
 
         grid.addWidget(self.btn_save, row, 0)
-        grid.addWidget(self.btn_load, row, 1)
         row += 1
 
 
@@ -532,39 +590,49 @@ class Form(QMainWindow):
         table_index = combo.property('row')
         self.on_override_change(table_index, 2)
 
-    def loadDefFile(self):
+    def loadDefFileDialog(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self,"Open build def", "","Def Files (*.json)", options=options)
+        fileName, _ = QFileDialog.getOpenFileName(self,"Open build def", self.projectPath,"Def Files (*.json)", options=options)
         if fileName:
-            with open(fileName, newline='\n') as def_file:
-                defs = json.load(def_file)
+            self.loadDefFile(fileName)
 
-                measurement_offset = 0
-                override_offset = 0
-                setting_offset = 0
+    def loadDefFile(self, fileName):
+        print("Opening Def "+fileName)
+        
+        with open(fileName, newline='\n') as def_file:
+            defs = json.load(def_file)
 
-                for m in defs["measurements"]:
-                    measurement = Measurement(m["name"], m["type"], measurement_offset, self.num_measurements)
-                    self.measurements[measurement_offset] = measurement
-                    measurement_offset += lengths[m["type"]]
-                    self.num_measurements += 1
+            measurement_offset = 0
+            override_offset = 0
+            setting_offset = 0
+
+            for m in defs["measurements"]:
+                measurement = Measurement(m["name"], m["type"], measurement_offset, self.num_measurements)
+                self.measurements[measurement_offset] = measurement
+                measurement_offset += lengths[m["type"]]
+                self.num_measurements += 1
                 
-                for s in defs["settings"]:
-                    setting = Setting(s["name"], 0, s["type"], s["default"], setting_offset, self.num_settings)
-                    self.settings[setting_offset] = setting
-                    setting_offset += lengths[s["type"]]
-                    self.num_settings += 1
+            for s in defs["settings"]:
+                setting = Setting(s["name"], 0, s["type"], s["default"], setting_offset, self.num_settings)
+                self.settings[setting_offset] = setting
+                setting_offset += lengths[s["type"]]
+                self.num_settings += 1
 
-                for o in defs["overrides"]:
-                    override = Override(o["name"], o["type"], override_offset, self.num_overrides)
-                    self.overrides[override_offset] = override
-                    override_offset += 4
-                    self.num_overrides += 1
+            for o in defs["overrides"]:
+                override = Override(o["name"], o["type"], override_offset, self.num_overrides)
+                self.overrides[override_offset] = override
+                override_offset += 4
+                self.num_overrides += 1
 
-                self.btn_hello.setEnabled(True)
-                self.btn_load.setEnabled(True)
-                    
+            self.btn_hello.setEnabled(True)
+            self.calOpenAct.setEnabled(True)
+            self.recentCalMenu.setEnabled(True)
+            
+            self.config["RecentDefs"][os.path.basename(fileName)] = fileName
+            self.recentDefFiles[os.path.basename(fileName)] = fileName
+            self.projectPath = os.path.split(fileName)[0]
+                      
             self.update_widgets()
 
     def getValueFromBytes(self,cal_type,b0,b1,b2,b3):
@@ -713,27 +781,35 @@ class Form(QMainWindow):
 
                 self.statusBar().showMessage("Cal saved to "+fileName)
 
-    def loadSettings(self):
+    def loadCalFileDialog(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self,"Open Cal File","","Cal Files (*.csv)", options=options)
+        fileName, _ = QFileDialog.getOpenFileName(self,"Open Cal File",self.projectPath,"Cal Files (*.csv)", options=options)
         if fileName:
-            with open(fileName, newline='\n') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-                for row in reader:
-                    name = row[0]
-                    str_val = row[1]
+            self.loadCalFile(fileName)
 
-                    for offset in self.settings:
-                        if self.settings[offset].name != name:
-                            continue
+    def loadCalFile(self, fileName):
+        print("Opening Cal "+fileName)
+        with open(fileName, newline='\n') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+            for row in reader:
+                name = row[0]
+                str_val = row[1]
 
-                        if self.settings[offset].cal_type == "float":
-                            self.settings[offset].value = float(str_val)
-                        else:
-                            self.settings[offset].value = int(str_val)
-                        table_index = self.settings[offset].index
-                        self.settings_table.item(table_index, 1).setText(str(val))
+                for offset in self.settings:
+                    if self.settings[offset].name != name:
+                        continue
+
+                    if self.settings[offset].cal_type == "float":
+                        self.settings[offset].value = float(str_val)
+                    else:
+                        self.settings[offset].value = int(str_val)
+                    table_index = self.settings[offset].index
+                    self.settings_table.item(table_index, 1).setText(str_val)
+
+            self.config["RecentCals"][os.path.basename(fileName)] = fileName
+            self.recentCalFiles[os.path.basename(fileName)] = fileName
+            self.projectPath = os.path.split(fileName)[0]
 
 
     def tick(self):
