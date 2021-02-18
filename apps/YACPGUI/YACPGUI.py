@@ -768,7 +768,7 @@ class Form(QMainWindow):
     def exportSettingsCSV(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getSaveFileName(self,"Save Cal File","","Cal Files (*.csv)", options=options)
+        fileName, _ = QFileDialog.getSaveFileName(self,"Save Cal File",self.projectPath,"Cal Files (*.csv)", options=options)
         if fileName:
             with open(fileName, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',',quotechar='"', quoting=csv.QUOTE_MINIMAL)

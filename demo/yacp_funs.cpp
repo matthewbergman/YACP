@@ -53,8 +53,16 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
 
   memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
   // TODO: are 32 bit ints backwards?
+
+  Serial.print(buf[4]);
+  Serial.print(" ");
+  Serial.print(buf[5]);
+  Serial.print(" ");
+  Serial.print(buf[6]);
+  Serial.print(" ");
+  Serial.println(buf[7]);
     
- can_send(SSCCP_UPDATE_ID, buf);
+  can_send(SSCCP_UPDATE_ID, buf);
 }
 
 void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len)
@@ -124,17 +132,43 @@ void handle_can(uint32_t id, uint8_t* buf)
       var_start = buf[1];
       var_start |= (uint16_t)buf[2] << 8;
       var_len = buf[3];
-      value = buf[4];
-      value |= (uint32_t)buf[5] << 8;
-      value |= (uint32_t)buf[6] << 16;
-      value |= (uint32_t)buf[7] << 24;
+
+      if (var_len == 1)
+      {
+        value = buf[4];
+      }
+      else if (var_len == 2)
+      {
+        value = buf[5];
+        value |= (uint32_t)buf[4] << 8;
+      }
+      else if (var_len == 4)
+      {
+        value = buf[7];
+        value |= (uint32_t)buf[6] << 8;
+        value |= (uint32_t)buf[5] << 16;
+        value |= (uint32_t)buf[4] << 24;
+      }
+      else
+        value = 0;
 
       Serial.print("type: ");
       Serial.print(message_type);
       Serial.print(" start: ");
       Serial.print(var_start);
       Serial.print(" len: ");
-      Serial.println(var_len);
+      Serial.print(var_len);
+      Serial.print(" data ");
+      Serial.print(buf[4]);
+      Serial.print(" ");
+      Serial.print(buf[5]);
+      Serial.print(" ");
+      Serial.print(buf[6]);
+      Serial.print(" ");
+      Serial.print(buf[7]);
+      Serial.print(" ");
+      Serial.println(value);
+      
 
       if (message_type == CAL_HELLO)
       {
@@ -148,6 +182,9 @@ void handle_can(uint32_t id, uint8_t* buf)
       {
         memcpy((uint8_t*)&cal.settings + var_start, &value, var_len);
         send_ack();
+        Serial.println(cal.settings.test3);
+        Serial.println(cal.settings.test1);
+        Serial.println(cal.settings.test2);
       }
       else if (message_type == CAL_READ_SETTING)
       {
