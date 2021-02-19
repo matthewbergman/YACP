@@ -1,6 +1,10 @@
 Name,Value
-build_number,10
-output_selector,0
-test3,3
-test1,2
-test2,1
+device_id,1
+revision,4
+setting_u8,255
+setting_u16,65535
+setting_u32,131071
+setting_i8,-127
+setting_i16,-4096
+setting_i32,-100000
+setting_f,56.1234016418457
