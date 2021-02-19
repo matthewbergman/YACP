@@ -52,15 +52,6 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
   buf[7] = 0;
 
   memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
-  // TODO: are 32 bit ints backwards?
-
-  Serial.print(buf[4]);
-  Serial.print(" ");
-  Serial.print(buf[5]);
-  Serial.print(" ");
-  Serial.print(buf[6]);
-  Serial.print(" ");
-  Serial.println(buf[7]);
     
   can_send(SSCCP_UPDATE_ID, buf);
 }
@@ -80,6 +71,14 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
   buf[7] = 0;
 
   memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
+
+  Serial.print(buf[4]);
+  Serial.print(" ");
+  Serial.print(buf[5]);
+  Serial.print(" ");
+  Serial.print(buf[6]);
+  Serial.print(" ");
+  Serial.println(buf[7]);
     
  can_send(SSCCP_UPDATE_ID, buf);
 }
@@ -152,6 +151,7 @@ void handle_can(uint32_t id, uint8_t* buf)
       else
         value = 0;
 
+      /*
       Serial.print("type: ");
       Serial.print(message_type);
       Serial.print(" start: ");
@@ -168,7 +168,7 @@ void handle_can(uint32_t id, uint8_t* buf)
       Serial.print(buf[7]);
       Serial.print(" ");
       Serial.println(value);
-      
+      */
 
       if (message_type == CAL_HELLO)
       {
@@ -182,9 +182,6 @@ void handle_can(uint32_t id, uint8_t* buf)
       {
         memcpy((uint8_t*)&cal.settings + var_start, &value, var_len);
         send_ack();
-        Serial.println(cal.settings.test3);
-        Serial.println(cal.settings.test1);
-        Serial.println(cal.settings.test2);
       }
       else if (message_type == CAL_READ_SETTING)
       {
@@ -253,7 +250,7 @@ void load_settings()
   Serial.println(calculated_checksum);
 
   uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal); i++)
+  for (size_t i=0; i<sizeof(cal.settings); i++)
   {
     cal_ptr[i] = eeprom_load_byte(i + 4);
   }

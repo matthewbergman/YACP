@@ -12,6 +12,7 @@ void can_send(uint32_t id, uint8_t* buf)
   can_out_msg.ext = 0;
   can_out_msg.len = 8;
   can_out_msg.id = id;
+  can_out_msg.flags.remote = 0;
 
   memcpy(&can_out_msg.buf[0], buf, 8);
     

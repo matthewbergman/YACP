@@ -330,7 +330,7 @@ class Form(QMainWindow):
 
         self.timer = QTimer(self) 
         self.timer.timeout.connect(self.tick) 
-        self.timer.start(10)
+        self.timer.start(20)
 
         self.show()
 
@@ -467,25 +467,28 @@ class Form(QMainWindow):
 
         # Measurements / Settings / Overrides
 
-        self.measurements_table = QTableWidget(0, 2)
+        self.measurements_table = QTableWidget(0, 3)
         self.measurements_table.verticalHeader().hide()
         self.measurements_table.setHorizontalHeaderItem(0, QTableWidgetItem("Measurement"))
         self.measurements_table.setHorizontalHeaderItem(1, QTableWidgetItem("Value"))
+        self.measurements_table.setHorizontalHeaderItem(2, QTableWidgetItem("Type"))
         form_lbx.addWidget(self.measurements_table)
 
 
-        self.settings_table = QTableWidget(0, 2)
+        self.settings_table = QTableWidget(0, 3)
         self.settings_table.verticalHeader().hide()
         self.settings_table.setHorizontalHeaderItem(0, QTableWidgetItem("Setting"))
         self.settings_table.setHorizontalHeaderItem(1, QTableWidgetItem("Value"))
+        self.settings_table.setHorizontalHeaderItem(2, QTableWidgetItem("Type"))
         self.settings_table.cellChanged.connect(self.on_setting_change)
         form_lbx.addWidget(self.settings_table)
 
-        self.overrides_table = QTableWidget(0, 3)
+        self.overrides_table = QTableWidget(0, 4)
         self.overrides_table.verticalHeader().hide()
         self.overrides_table.setHorizontalHeaderItem(0, QTableWidgetItem("Override"))
         self.overrides_table.setHorizontalHeaderItem(1, QTableWidgetItem("Status"))
         self.overrides_table.setHorizontalHeaderItem(2, QTableWidgetItem("Value"))
+        self.overrides_table.setHorizontalHeaderItem(3, QTableWidgetItem("Type"))
         self.overrides_table.cellChanged.connect(self.on_override_change)
         form_lbx.addWidget(self.overrides_table)
         
@@ -505,6 +508,10 @@ class Form(QMainWindow):
             item = QTableWidgetItem(str(measurement.value))
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.measurements_table.setItem(row, 1, item)
+
+            item = QTableWidgetItem(str(measurement.cal_type))
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.measurements_table.setItem(row, 2, item)
             row += 1
 
         row = 0
@@ -517,6 +524,10 @@ class Form(QMainWindow):
             self.settings_table.setItem(row, 0, item)
             
             self.settings_table.setItem(row, 1, QTableWidgetItem(str(setting.value)))
+
+            item = QTableWidgetItem(setting.cal_type)
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.settings_table.setItem(row, 2, item)
             row += 1
         self.settings_table.cellChanged.connect(self.on_setting_change)
 
@@ -540,11 +551,15 @@ class Form(QMainWindow):
             self.overrides_table.setCellWidget(row, 1, combobox)
             
             self.overrides_table.setItem(row, 2, QTableWidgetItem(str(override.value)))
+
+            item = QTableWidgetItem(override.cal_type)
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.overrides_table.setItem(row, 3, item)
             row += 1
         self.overrides_table.cellChanged.connect(self.on_override_change)
 
     def on_setting_change(self, table_index, column):
-        if column != 1:
+        if column != 1 or table_index == None:
             return
 
         setting_key = [*self.settings][table_index]
@@ -558,11 +573,11 @@ class Form(QMainWindow):
         [b0,b1,b2,b3] = self.getBytesFromValue(setting.cal_type, setting.value)
 
         self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
-            
-        print("Set "+str(table_index)+" to "+str(setting.value))
 
     def on_override_change(self, table_index, column):
-        if column != 2:
+        print(str(table_index)+" "+str(column))
+        
+        if column != 2 or table_index == None:
             return
 
         override_key = [*self.overrides][table_index]
@@ -572,16 +587,15 @@ class Form(QMainWindow):
             override.value = float(self.overrides_table.item(table_index, 2).text())
         else:
             override.value = int(self.overrides_table.item(table_index, 2).text())
-        print("Set "+str(table_index)+" to "+str(override.value))
 
         override.status = self.overrides_table.cellWidget(table_index, 1).currentText()
         enabled = False
         if override.status == "Overridden":
             enabled = True
 
-        print("Set "+str(table_index)+" status to "+str(enabled)+" "+override.status)
-
         [b0,b1,b2,b3] = self.getBytesFromValue(override.cal_type, override.value)
+
+        print(str(enabled)+" "+str(b0)+" "+str(b1)+" "+str(b2)+" "+str(b3)+" "+str(override.value))
 
         self.set_override_signal.emit(enabled, override.offset, lengths[override.cal_type], b0,b1,b2,b3)
 
@@ -598,8 +612,6 @@ class Form(QMainWindow):
             self.loadDefFile(fileName)
 
     def loadDefFile(self, fileName):
-        print("Opening Def "+fileName)
-        
         with open(fileName, newline='\n') as def_file:
             defs = json.load(def_file)
 
@@ -622,7 +634,7 @@ class Form(QMainWindow):
             for o in defs["overrides"]:
                 override = Override(o["name"], o["type"], override_offset, self.num_overrides)
                 self.overrides[override_offset] = override
-                override_offset += 4
+                override_offset += 5
                 self.num_overrides += 1
 
             self.btn_hello.setEnabled(True)
@@ -646,12 +658,12 @@ class Form(QMainWindow):
             [typed_value] = struct.unpack('>h',bytes([b1,b0]))
         elif cal_type == "uint32":
             [typed_value] = struct.unpack('>I',bytes([b3,b2,b1,b0]))
-        elif cal_type == "int16":
+        elif cal_type == "int32":
             [typed_value] = struct.unpack('>i',bytes([b3,b2,b1,b0]))
         elif cal_type == "float":
             [typed_value] = struct.unpack('>f',bytes([b3,b2,b1,b0]))
 
-        print(str(b3)+" "+str(b2)+" "+str(b1)+" "+str(b0)+" = "+str(typed_value))
+        #print(str(b3)+" "+str(b2)+" "+str(b1)+" "+str(b0)+" = "+str(typed_value))
             
         return typed_value
 
@@ -670,13 +682,11 @@ class Form(QMainWindow):
             bs = struct.pack('>i',val)
         elif cal_type == "float":
             bs = struct.pack('>f',val)
-            # TODO: backwards byte order?
-            # 2.5 = [64, 32, 0, 0]
 
         ints = list(bs)
         ints += [0] * (4 - len(ints))
 
-        print(str(val)+" = "+str(ints[3])+" "+str(ints[2])+" "+str(ints[1])+" "+str(ints[0]))
+        #print(cal_type+" "+str(val)+" = "+str(ints[3])+" "+str(ints[2])+" "+str(ints[1])+" "+str(ints[0]))
 
         return ints
 
@@ -686,8 +696,6 @@ class Form(QMainWindow):
         cal_type = self.measurements[var_start].cal_type
         value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)        
         self.measurements_table.item(table_index, 1).setText(str(value))
-        
-        print("Set measurement "+self.measurements[var_start].name+" to "+str(value))
 
     @pyqtSlot(int,int,int,int,int,int)
     def updateSetting(self, var_start, var_len, b0,b1,b2,b3):
@@ -695,23 +703,19 @@ class Form(QMainWindow):
         cal_type = self.settings[var_start].cal_type
         value = self.getValueFromBytes(cal_type,b0,b1,b2,b3) 
         self.settings_table.item(table_index, 1).setText(str(value))
-        
-        print("Set setting "+self.settings[var_start].name+" to "+str(value))
 
     @pyqtSlot(bool,int,int,int,int,int,int)
     def updateOverride(self, overridden, var_start, var_len, b0,b1,b2,b3):
         table_index = self.overrides[var_start].index
         cal_type = self.overrides[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3) 
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
+        
         self.overrides_table.item(table_index, 2).setText(str(value))
-
         if overridden:
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Overridden")
         else:
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Passthrough")
         
-        print("Set override "+self.overrides[var_start].name+" to "+str(overridden)+" value "+str(value))
-
     @pyqtSlot(int)
     def updateDeviceList(self, device_id):
         self.combo_devices.addItem(str(device_id))
@@ -847,7 +851,10 @@ class Form(QMainWindow):
                 self.read_measurement_index = 0
             
         elif self.device_state == DEVICE_STATE_CONNECTED:
-            pass
+            self.readMeasurement()
+            self.read_measurement_index += 1
+            if self.read_measurement_index >= self.num_measurements:
+                self.read_measurement_index = 0
 
     def connect(self):
         bustype = self.combo_bustype.currentText()
@@ -910,6 +917,6 @@ if __name__ == "__main__":
     excepthook = sys.excepthook
     sys.excepthook = lambda t, val, tb: excepthook(t, val, tb)
     form = Form()
-    form.setGeometry(100, 100, 1800, 500)
+    form.setGeometry(100, 100, 1900, 500)
     form.show()
     exit(app.exec_())

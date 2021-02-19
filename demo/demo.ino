@@ -17,9 +17,16 @@ void setup()
   
   yacp_init();
 
-  cal.measurements.cal_ver = 1;
+  cal.measurements.var_u8 = 254;
+  cal.measurements.var_u16 = 65535;
+  cal.measurements.var_u32 = 75000;
+  cal.measurements.var_i8 = -1;
+  cal.measurements.var_i16 = -300;
+  cal.measurements.var_i32 = -75000;
+  cal.measurements.var_f = 0.12345;
 
-  cal.measurements.test_var = 0xAA;
+  Serial.println(cal.overrides.override_i32.value.i32);
+  Serial.println(cal.overrides.override_f.value.f);
 
 
   Serial.println("Struct sizes");
@@ -42,21 +49,24 @@ void setup()
 void loop() 
 {
   yacp_can_recv();
-  
-  if (cal.overrides.output_override.status == CAL_OVERRIDDEN)
-  {
-    //digitalWrite(cal.settings.output_selector, cal.overrides.output_override.value);
-    cal.measurements.output_status = cal.overrides.output_override.value.u8;
-  }
+
+  if (cal.overrides.override_i32.status == CAL_OVERRIDDEN)
+    cal.measurements.var_i32 = cal.overrides.override_i32.value.i32;
   else
-  {
-    //digitalWrite(cal.settings.output_selector, LOW);
-    cal.measurements.output_status = 0;
-  }
+    cal.measurements.var_i32 = -75000;
+
+  if (cal.overrides.override_f.status == CAL_OVERRIDDEN)
+    cal.measurements.var_f = cal.overrides.override_f.value.f;
+  else
+    cal.measurements.var_f = 0.12345;
 
   if (millis() > startup_counter)
   {
     cal.measurements.counter++;
     startup_counter = millis() + 1000;
+
+    Serial.print(cal.overrides.override_f.status);
+    Serial.print(" ");
+    Serial.println(cal.overrides.override_f.value.f);
   }
 }

@@ -1,24 +1,36 @@
 {
 	"measurements": [
 		{
-			"name": "test_var",
-			"type": "uint16"
-		},
-		{
-			"name": "cal_ver",
+			"name": "var_u8",
 			"type": "uint8"
 		},
 		{
-			"name": "test_var2",
+			"name": "var_u16",
+			"type": "uint16"
+		},
+		{
+			"name": "var_u32",
 			"type": "uint32"
 		},
 		{
-			"name": "output_status",
-			"type": "uint8"
+			"name": "var_i8",
+			"type": "int8"
+		},
+		{
+			"name": "var_i16",
+			"type": "int16"
+		},
+		{
+			"name": "var_i32",
+			"type": "int32"
+		},
+		{
+			"name": "var_f",
+			"type": "float"
 		},
 		{
 			"name": "counter",
-			"type": "uint16"
+			"type": "uint8"
 		}
 	],
 	"settings": [
@@ -30,45 +42,72 @@
 		{
 			"name": "revision",
 			"type": "uint8",
-			"default": "3"
+			"default": "4"
 		},
-		{
-			"name": "output_selector",
+{
+			"name": "setting_u8",
 			"type": "uint8",
-			"default": "0"
+			"default": "255"
 		},
 		{
-			"name": "test3",
+			"name": "setting_u16",
+			"type": "uint16",
+			"default": "65535"
+		},
+		{
+			"name": "setting_u32",
 			"type": "uint32",
-			"default": "3"
+			"default": "131071"
 		},
 		{
-			"name": "test1",
-			"type": "uint8",
-			"default": "2"
+			"name": "setting_i8",
+			"type": "int8",
+			"default": "-254"
 		},
 		{
-			"name": "test2",
+			"name": "setting_i16",
+			"type": "int16",
+			"default": "-4096"
+		},
+		{
+			"name": "setting_i32",
+			"type": "int32",
+			"default": "-100000"
+		},
+		{
+			"name": "setting_f",
 			"type": "float",
-			"default": "1.5"
+			"default": "56.1234"
 		}
 	],
 	"overrides": [
 		{
-			"name": "output_override",
-			"type": "uint16"
-		},
-		{
-			"name": "output_override2",
+			"name": "override_u8",
 			"type": "uint8"
 		},
 		{
-			"name": "output_override3",
-			"type": "uint8"
+			"name": "override_u16",
+			"type": "uint16"
 		},
 		{
-			"name": "output_override4",
-			"type": "uint16"
+			"name": "override_u32",
+			"type": "uint32"
+		},
+{
+			"name": "override_i8",
+			"type": "int8"
+		},
+		{
+			"name": "overridei_16",
+			"type": "int16"
+		},
+		{
+			"name": "override_i32",
+			"type": "int32"
+		},
+		{
+			"name": "override_f",
+			"type": "float"
 		}
 	]
 }

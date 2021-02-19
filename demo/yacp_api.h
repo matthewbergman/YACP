@@ -14,6 +14,8 @@ typedef union cal_value
   int8_t i8;
   uint16_t u16;
   int16_t i16;
+  uint32_t u32;
+  int32_t i32;
   float f;
 } cal_value;
 
