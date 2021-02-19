@@ -1,3 +1,15 @@
+/*
+ * yacp_driver_teensy.cpp
+ * Yet Another Calibration Protocol (YACP)
+ * 
+ * This is a driver for use with Teensy 3.5 or Teensy 3.6 boards and Can0.
+ * 
+ * Matthew Bergman 2021
+ * 
+ * MIT license, all text above must be included in any redistribution.
+ * See license.txt at the root of the repository for full license text.
+ */
+
 #include <FlexCAN.h>
 #include <EEPROM.h>
 

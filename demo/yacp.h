@@ -1,3 +1,15 @@
+/*
+ * yacp.h
+ * Yet Another Calibration Protocol (YACP)
+ * 
+ * This is the main definition of the YACP protocol.
+ * 
+ * Matthew Bergman 2021
+ * 
+ * MIT license, all text above must be included in any redistribution.
+ * See license.txt at the root of the repository for full license text.
+ */
+
 #ifndef YACP_H_
 #define YACP_H_
 
@@ -16,6 +28,8 @@
 #define CAL_HELLO 7
 #define CAL_ACK 8
 
+#define EEPROM_CRC_OFFSET 0
+#define EEPROM_SETTINGS_OFFSET 4
 
 // YACP Internal Functions
 void load_defaults();

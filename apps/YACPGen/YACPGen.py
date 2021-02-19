@@ -1,3 +1,17 @@
+"""
+YACPGen.py
+Yet Another Calibration Protocol (YACP)
+
+This code generates cal.c and cal.h files from the project-def.json YACP def file.
+
+Usage: YACP_gen.py ./path/to/project-def.json
+
+Matthew Bergman 2021
+
+MIT license, all text above must be included in any redistribution.
+See license.txt at the root of the repository for full license text.
+"""
+
 import json
 import sys
 
@@ -20,6 +34,7 @@ types_c["int32"] = "int32_t"
 types_c["float"] = "float"
 
 def header_start(rev):
+    hfile.write("/* THIS IS GENERATED CODE FROM THE YACP PROJECT. DO NOT MODIFY! */\n\n")
     hfile.write("#ifndef YACP_CAL_H_\n")
     hfile.write("#define YACP_CAL_H_\n\n")
     hfile.write("#include \"yacp_api.h\"\n\n")
@@ -69,6 +84,7 @@ def header_end():
     hfile.write("#endif\n")
 
 def impl_start():
+    cfile.write("/* THIS IS GENERATED CODE FROM THE YACP PROJECT. DO NOT MODIFY! */\n\n")
     cfile.write("#include \"cal.h\"\n\n")
     cfile.write("calibration cal;\n\n")
     cfile.write("void load_defaults()\n")

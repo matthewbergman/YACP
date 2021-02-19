@@ -1,3 +1,5 @@
+/* THIS IS GENERATED CODE FROM THE YACP PROJECT. DO NOT MODIFY! */
+
 #include "cal.h"
 
 calibration cal;

@@ -1,14 +1,26 @@
+/*
+ * yacp_funs.c
+ * Yet Another Calibration Protocol (YACP)
+ * 
+ * This is the main implemenation of the YACP protocol.
+ * 
+ * Matthew Bergman 2021
+ * 
+ * MIT license, all text above must be included in any redistribution.
+ * See license.txt at the root of the repository for full license text.
+ */
+
 #include "cal.h"
 #include "yacp.h"
 
-#include <arduino.h> // TODO: remove
-
 #include <string.h>
 
+// Vars
 extern calibration cal;
+bool yacp_eeprom_version_mismatch_f;
+bool yacp_eeprom_crc_mismatch_f;
 
-// Internal functions
-
+// Internal function declarations
 void send_measurement(uint16_t measurement_start, uint8_t var_len);
 void send_setting(uint16_t setting_start, uint8_t var_len);
 void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len);
@@ -16,12 +28,87 @@ void send_hello();
 void send_ack();
 uint32_t eeprom_crc();
 
-// Functions
+// API Functions
+void yacp_init()
+{
+  /* First load the default values defined in the cal.c generated code.
+   * Then attempt to load the stored settings from EEEPROM. 
+   */
+  load_defaults();
+  load_settings();
+}
 
+void load_settings()
+{  
+  // Load the stored settings CRC value from EEPROM
+  uint32_t stored_checksum = 0;
+  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET);
+  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 1) << 8;
+  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 2) << 16;
+  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 3) << 24;
+
+  // Generate a CRC of the stored settings in EEPROM
+  uint32_t calculated_checksum = eeprom_crc();
+
+  // Make sure the data in EEPROM has not changed since
+  // the CRC was stored during the last call to save_settings().
+  if (stored_checksum != calculated_checksum)
+  {
+    // EEPROM has changed, raise the crc mismatch flag!
+    yacp_eeprom_crc_mismatch_f = true;
+
+    // DO NOT load the settings from EEPROM, use the default values instead.
+    return;
+  }
+
+  // The EEPROM CRC is valid, load the settings into the cal settings struct.
+  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
+  for (size_t i=0; i<sizeof(cal.settings); i++)
+  {
+    cal_ptr[i] = eeprom_load_byte(i + EEPROM_SETTINGS_OFFSET);
+  }
+
+  // Verify tha the revision compiled into cal.h matches what is stored in
+  // the settings in EEPROM. This assures that the struct matches the data
+  // offsets and sizes of the data in EEPROM.
+  if (CAL_REVISION != cal.settings.revision)
+  {
+    // The stored revision number in EEPROM does not match the cal.h revision.
+    yacp_eeprom_version_mismatch_f = true;
+
+    // Clear out the settings struct of the incorrect EEPROM data
+    memset(&cal.settings, 0, sizeof(cal.settings));
+    // Load the defaults from the generated code and save to EEPROM
+    load_defaults();
+    save_settings();
+
+    // A new cal will need to be pushed and saved using the GUI.
+  }
+}
+
+void save_settings()
+{
+  // Save the cal settings struct to EEPROM, byte for byte.
+  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
+  for (size_t i=0; i<sizeof(cal.settings); i++)
+    eeprom_store_byte(i + EEPROM_SETTINGS_OFFSET, cal_ptr[i]);
+
+  // Calculate the CRC of the EEPROM data just saved
+  uint32_t crc = eeprom_crc();
+
+  // Save the CRC value to EEPROM for validation on next startup
+  eeprom_store_byte(EEPROM_CRC_OFFSET, crc);
+  eeprom_store_byte(EEPROM_CRC_OFFSET + 1, crc >> 8);
+  eeprom_store_byte(EEPROM_CRC_OFFSET + 2, crc >> 16);
+  eeprom_store_byte(EEPROM_CRC_OFFSET + 3, crc >> 24);
+}
+
+// Internal Functions
 void send_measurement(uint16_t measurement_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
+  // Send a measurement value back to the requestor
   buf[0] = CAL_READ_MEASUREMENT | (cal.settings.device_id << 4);
   buf[1] = measurement_start;
   buf[2] = measurement_start >> 8;
@@ -41,6 +128,7 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
+  // Send a setting value back to the requestor
   buf[0] = CAL_READ_SETTING | (cal.settings.device_id << 4);
   buf[1] = setting_start;
   buf[2] = setting_start >> 8;
@@ -60,6 +148,7 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
 {
   uint8_t buf[8];
 
+  // Send a override value and status back to the requestor
   buf[0] = message_type | (cal.settings.device_id << 4);
   buf[1] = override_start;
   buf[2] = override_start >> 8;
@@ -71,14 +160,6 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
   buf[7] = 0;
 
   memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
-
-  Serial.print(buf[4]);
-  Serial.print(" ");
-  Serial.print(buf[5]);
-  Serial.print(" ");
-  Serial.print(buf[6]);
-  Serial.print(" ");
-  Serial.println(buf[7]);
     
  can_send(SSCCP_UPDATE_ID, buf);
 }
@@ -87,6 +168,7 @@ void send_hello()
 {
   uint8_t buf[8];
 
+  // Respond to a HELLO message with our device ID
   buf[0] = CAL_HELLO | (cal.settings.device_id << 4);
   buf[1] = 0;
   buf[2] = 0;
@@ -103,11 +185,12 @@ void send_ack()
 {
   uint8_t buf[8];
 
+  // Send an ack after a successful command response
   buf[0] = CAL_ACK | (cal.settings.device_id << 4);
   buf[1] = 0;
   buf[2] = 0;
   buf[3] = 0;
-  buf[4] = 1;
+  buf[4] = 1; // 1: success, 0: failure
   buf[5] = 0;
   buf[6] = 0;
   buf[7] = 0;
@@ -150,25 +233,6 @@ void handle_can(uint32_t id, uint8_t* buf)
       }
       else
         value = 0;
-
-      /*
-      Serial.print("type: ");
-      Serial.print(message_type);
-      Serial.print(" start: ");
-      Serial.print(var_start);
-      Serial.print(" len: ");
-      Serial.print(var_len);
-      Serial.print(" data ");
-      Serial.print(buf[4]);
-      Serial.print(" ");
-      Serial.print(buf[5]);
-      Serial.print(" ");
-      Serial.print(buf[6]);
-      Serial.print(" ");
-      Serial.print(buf[7]);
-      Serial.print(" ");
-      Serial.println(value);
-      */
 
       if (message_type == CAL_HELLO)
       {
@@ -220,70 +284,6 @@ void handle_can(uint32_t id, uint8_t* buf)
   }
 }
 
-void yacp_init()
-{
-  load_defaults();
-  load_settings();
-}
-
-void load_settings()
-{  
-  uint32_t stored_checksum = 0;
-  stored_checksum |= (uint32_t)eeprom_load_byte(0);
-  stored_checksum |= (uint32_t)eeprom_load_byte(1) << 8;
-  stored_checksum |= (uint32_t)eeprom_load_byte(2) << 16;
-  stored_checksum |= (uint32_t)eeprom_load_byte(3) << 24;
-  
-  uint32_t calculated_checksum = eeprom_crc();
-
-  if (stored_checksum != calculated_checksum)
-  {
-    Serial.print("CRC Failed: stored ");
-    Serial.print(stored_checksum);
-    Serial.print(" actual ");
-    Serial.println(calculated_checksum);
-    
-    return;
-  }
-
-  Serial.print("EEPROM CRC: ");
-  Serial.println(calculated_checksum);
-
-  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
-  {
-    cal_ptr[i] = eeprom_load_byte(i + 4);
-  }
-
-  if (CAL_REVISION != cal.settings.revision)
-  {
-    Serial.print("REV ");
-    Serial.print(cal.settings.revision);
-    Serial.print(" expected ");
-    Serial.println(CAL_REVISION);
-
-    memset(&cal.settings, 0, sizeof(cal.settings));
-    load_defaults();
-    save_settings();
-  }
-}
-
-void save_settings()
-{
-  uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
-  {
-    eeprom_store_byte(i + 4, cal_ptr[i]);
-  }
-
-  uint32_t crc = eeprom_crc();
-
-  eeprom_store_byte(0, crc);
-  eeprom_store_byte(1, crc >> 8);
-  eeprom_store_byte(2, crc >> 16);
-  eeprom_store_byte(3, crc >> 24);
-}
-
 uint32_t eeprom_crc() 
 {
   // CRC calc by Christopher Andrews.
@@ -300,10 +300,7 @@ uint32_t eeprom_crc()
   
   for (uint16_t index = 0; index < sizeof(cal.settings); ++index) 
   {
-    // TODO: make a define for cal EEPROM address start
-    val = eeprom_load_byte(index + 4); // Add 4 to skip over the CRC value in the start of EEPROM
-
-    Serial.println(val);
+    val = eeprom_load_byte(index + EEPROM_SETTINGS_OFFSET);
     
     crc = crc_table[(crc ^ val) & 0x0f] ^ (crc >> 4);
     crc = crc_table[(crc ^ (val >> 4)) & 0x0f] ^ (crc >> 4);

@@ -1,3 +1,15 @@
+"""
+YACPGUI.py
+Yet Another Calibration Protocol (YACP)
+
+This is the main calibration GUI for interfacing with YACP implementing firmware projects.
+
+Matthew Bergman 2021
+
+MIT license, all text above must be included in any redistribution.
+See license.txt at the root of the repository for full license text.
+"""
+
 import can
 import time
 import sys
@@ -80,11 +92,9 @@ class CANThread(QThread):
     def connect(self, _type, _channel, _bitrate):
         try:
             self.bus = can.interface.Bus(bustype=_type, channel=_channel, bitrate=_bitrate)
-            print("Connected to CAN device")
             self.send_status_signal.emit(0)
         except:
             self.bus = None
-            print("Failed to find CAN device")
             traceback.print_exc()
             self.send_status_signal.emit(1)
 
@@ -93,7 +103,7 @@ class CANThread(QThread):
             self.bus.shutdown()
             self.send_status_signal.emit(2)
         except:
-            print("Failed to shut down bus")
+            pass
         self.bus = None
 
     # run method gets called when we start the thread
@@ -172,7 +182,7 @@ class CANThread(QThread):
             try:
                 self.bus.send(msg, 1)
             except:
-                print("Failed to send CAN message")
+                traceback.print_exc()
 
     @pyqtSlot()
     def sendSaveSettings(self):
@@ -240,9 +250,8 @@ class CANThread(QThread):
             try:
                 self.bus.send(msg, 1)
             except:
-                print("Failed to send CAN message")
+                traceback.print_exc()
     
-
 class Measurement:
     def __init__(self, name, cal_type, offset, index):
         self.name = name
@@ -575,8 +584,6 @@ class Form(QMainWindow):
         self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
 
     def on_override_change(self, table_index, column):
-        print(str(table_index)+" "+str(column))
-        
         if column != 2 or table_index == None:
             return
 
@@ -595,7 +602,7 @@ class Form(QMainWindow):
 
         [b0,b1,b2,b3] = self.getBytesFromValue(override.cal_type, override.value)
 
-        print(str(enabled)+" "+str(b0)+" "+str(b1)+" "+str(b2)+" "+str(b3)+" "+str(override.value))
+        #print(str(enabled)+" "+str(b0)+" "+str(b1)+" "+str(b2)+" "+str(b3)+" "+str(override.value))
 
         self.set_override_signal.emit(enabled, override.offset, lengths[override.cal_type], b0,b1,b2,b3)
 
@@ -793,7 +800,6 @@ class Form(QMainWindow):
             self.loadCalFile(fileName)
 
     def loadCalFile(self, fileName):
-        print("Opening Cal "+fileName)
         with open(fileName, newline='\n') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='"')
             for row in reader:
