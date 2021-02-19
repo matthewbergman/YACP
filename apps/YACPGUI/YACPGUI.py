@@ -455,7 +455,7 @@ class Form(QMainWindow):
         self.btn_device_connect.clicked.connect(self.deviceConnect)
         self.btn_device_connect.setEnabled(False)
 
-        self.btn_save = QPushButton("Push and Save Cal")
+        self.btn_save = QPushButton("Persist and Save Cal")
         self.btn_save.clicked.connect(self.saveSettings)
         self.btn_save.setEnabled(False)
 
