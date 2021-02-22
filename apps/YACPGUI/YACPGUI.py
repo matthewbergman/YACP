@@ -18,6 +18,7 @@ import json
 import struct
 import configparser
 import os
+import traceback
 
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QMainWindow, QAction, qApp, QApplication, QMenu
@@ -270,6 +271,7 @@ class Setting:
             self.value = default_value
         else:
             self.value = 0
+        self.choices = {}
         self.offset = offset
         self.index = index
 
@@ -361,10 +363,16 @@ class Form(QMainWindow):
             return
 
         for file, path in self.config.items("RecentDefs"):
-            self.recentDefFiles[file] = path
+            if not os.path.exists(path):
+                self.config.remove_option("RecentDefs", file)
+            else:
+                self.recentDefFiles[file] = path
 
         for file, path in self.config.items("RecentCals"):
-            self.recentCalFiles[file] = path
+            if not os.path.exists(path):
+                self.config.remove_option("RecentCals", file)
+            else:
+                self.recentCalFiles[file] = path
 
         # TODO: load CAN settigns
 
@@ -396,26 +404,20 @@ class Form(QMainWindow):
         self.calOpenAct.triggered.connect(self.loadCalFileDialog)
         self.calOpenAct.setEnabled(False)
 
-
         for calFile in self.recentCalFiles.keys():
             recentOpenAct = QAction(calFile, self)
-            recentOpenAct.triggered.connect(lambda: self.loadCalFile(self.recentCalFiles[calFile]))
+            recentOpenAct.triggered.connect(lambda c=calFile,f=calFile: self.loadCalFile(self.recentCalFiles[f]))
             self.recentCalMenu.addAction(recentOpenAct)
 
         for defFile in self.recentDefFiles.keys():
             recentOpenAct = QAction(defFile, self)
-            recentOpenAct.triggered.connect(lambda: self.loadDefFile(self.recentDefFiles[defFile]))
+            recentOpenAct.triggered.connect(lambda c=defFile,f=defFile: self.loadDefFile(self.recentDefFiles[f])) # var c is used to handle the triggered first arg
             recentDefMenu.addAction(recentOpenAct)
-        
 
         fileMenu.addAction(self.defOpenAct)
         fileMenu.addAction(self.calOpenAct)
         fileMenu.addMenu(recentDefMenu)
         fileMenu.addMenu(self.recentCalMenu)
-        
-        
-        
-        
         
         form_lbx = QBoxLayout(QBoxLayout.LeftToRight, parent=self)
         main_frame = QFrame(self)
@@ -531,8 +533,18 @@ class Form(QMainWindow):
             item = QTableWidgetItem(setting.name)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.settings_table.setItem(row, 0, item)
-            
-            self.settings_table.setItem(row, 1, QTableWidgetItem(str(setting.value)))
+
+            if len(setting.choices) == 0:
+                self.settings_table.setItem(row, 1, QTableWidgetItem(str(setting.value)))
+            else:
+                combobox = QComboBox()
+                for choice_value in setting.choices.keys():
+                    combobox.addItem(setting.choices[choice_value], choice_value)
+                combobox.setProperty('row', row)
+                combobox.currentIndexChanged.connect(self.on_setting_combobox_change)
+                item = QTableWidgetItem()
+                self.settings_table.setItem(row, 1, item)
+                self.settings_table.setCellWidget(row, 1, combobox)
 
             item = QTableWidgetItem(setting.cal_type)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
@@ -611,6 +623,29 @@ class Form(QMainWindow):
         table_index = combo.property('row')
         self.on_override_change(table_index, 2)
 
+    def on_setting_combobox_change(self):
+        combo = self.sender()
+        table_index = combo.property('row')
+
+        if table_index == None:
+            return
+
+        setting_key = [*self.settings][table_index]
+        setting = self.settings[setting_key]
+        choice = combo.currentData()
+
+        if setting.cal_type == 'float':
+            setting.value = float(choice)
+        else:
+            setting.value = int(choice)
+
+        print("Set value to "+str(setting.value))
+
+        [b0,b1,b2,b3] = self.getBytesFromValue(setting.cal_type, setting.value)
+
+        self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
+        
+
     def loadDefFileDialog(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
@@ -619,6 +654,7 @@ class Form(QMainWindow):
             self.loadDefFile(fileName)
 
     def loadDefFile(self, fileName):
+        print("def: "+fileName)
         with open(fileName, newline='\n') as def_file:
             defs = json.load(def_file)
 
@@ -634,6 +670,11 @@ class Form(QMainWindow):
                 
             for s in defs["settings"]:
                 setting = Setting(s["name"], 0, s["type"], s["default"], setting_offset, self.num_settings)
+
+                if "choices" in s.keys():
+                    for choice in s["choices"]:
+                        setting.choices[choice["value"]] = choice["name"]
+                
                 self.settings[setting_offset] = setting
                 setting_offset += lengths[s["type"]]
                 self.num_settings += 1
@@ -701,26 +742,40 @@ class Form(QMainWindow):
     def updateMeasurement(self, var_start, var_len, b0,b1,b2,b3):
         table_index = self.measurements[var_start].index
         cal_type = self.measurements[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)        
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
+
+        self.measurements[var_start].value = value
+        
         self.measurements_table.item(table_index, 1).setText(str(value))
 
     @pyqtSlot(int,int,int,int,int,int)
     def updateSetting(self, var_start, var_len, b0,b1,b2,b3):
         table_index = self.settings[var_start].index
         cal_type = self.settings[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3) 
-        self.settings_table.item(table_index, 1).setText(str(value))
+        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
+
+        self.settings[var_start].value = value
+
+        if len(self.settings[var_start].choices) == 0:
+            self.settings_table.item(table_index, 1).setText(str(value))
+        else:
+            index = self.settings_table.cellWidget(table_index, 1).findData(value)
+            self.settings_table.cellWidget(table_index, 1).setCurrentIndex(index)
 
     @pyqtSlot(bool,int,int,int,int,int,int)
     def updateOverride(self, overridden, var_start, var_len, b0,b1,b2,b3):
         table_index = self.overrides[var_start].index
         cal_type = self.overrides[var_start].cal_type
         value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
+
+        self.overrides[var_start].value = value
         
         self.overrides_table.item(table_index, 2).setText(str(value))
         if overridden:
+            self.overrides[var_start].status = "Overridden"
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Overridden")
         else:
+            self.overrides[var_start].status = "Passthrough"
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Passthrough")
         
     @pyqtSlot(int)
@@ -742,7 +797,7 @@ class Form(QMainWindow):
             self.read_setting_index = 0
             self.read_override_index = 0
             self.device_state = DEVICE_STATE_READING_SETTINGS
-
+            
             self.btn_save.setEnabled(True)
 
     def readMeasurement(self):
@@ -800,6 +855,7 @@ class Form(QMainWindow):
             self.loadCalFile(fileName)
 
     def loadCalFile(self, fileName):
+        print("cal: "+fileName)
         with open(fileName, newline='\n') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='"')
             for row in reader:
@@ -810,12 +866,31 @@ class Form(QMainWindow):
                     if self.settings[offset].name != name:
                         continue
 
+                    f = False
                     if self.settings[offset].cal_type == "float":
                         self.settings[offset].value = float(str_val)
+                        f = True
                     else:
                         self.settings[offset].value = int(str_val)
+                        
                     table_index = self.settings[offset].index
-                    self.settings_table.item(table_index, 1).setText(str_val)
+
+                    if len(self.settings[offset].choices) == 0:
+                        self.settings_table.item(table_index, 1).setText(str_val)
+                    else:
+                        for choice in self.settings[offset].choices.keys():
+                            if f == True:
+                                val = float(choice)
+                            else:
+                                val = int(choice)
+                            if val == self.settings[offset].value:
+                                break
+                            i += 1
+                            
+                        if i >= len(self.settings[offset].choices):
+                            i = 0
+                        
+                        self.settings_table.cellWidget(table_index, 1).setCurrentIndex(i)
 
             self.config["RecentCals"][os.path.basename(fileName)] = fileName
             self.recentCalFiles[os.path.basename(fileName)] = fileName

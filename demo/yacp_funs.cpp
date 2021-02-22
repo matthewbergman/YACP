@@ -121,7 +121,7 @@ void send_measurement(uint16_t measurement_start, uint8_t var_len)
 
   memcpy(&buf[4], (uint8_t*)&cal.measurements + measurement_start, var_len);
     
-  can_send(SSCCP_UPDATE_ID, buf);
+  can_send(YACP_UPDATE_ID, buf);
 }
 
 void send_setting(uint16_t setting_start, uint8_t var_len)
@@ -141,7 +141,7 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
 
   memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
     
-  can_send(SSCCP_UPDATE_ID, buf);
+  can_send(YACP_UPDATE_ID, buf);
 }
 
 void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len)
@@ -161,7 +161,7 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
 
   memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
     
- can_send(SSCCP_UPDATE_ID, buf);
+ can_send(YACP_UPDATE_ID, buf);
 }
 
 void send_hello()
@@ -178,7 +178,7 @@ void send_hello()
   buf[6] = 0;
   buf[7] = 0;
     
-  can_send(SSCCP_UPDATE_ID, buf);
+  can_send(YACP_UPDATE_ID, buf);
 }
 
 void send_ack()
@@ -195,7 +195,7 @@ void send_ack()
   buf[6] = 0;
   buf[7] = 0;
     
-  can_send(SSCCP_UPDATE_ID, buf);
+  can_send(YACP_UPDATE_ID, buf);
 }
 
 void handle_can(uint32_t id, uint8_t* buf)
@@ -208,7 +208,7 @@ void handle_can(uint32_t id, uint8_t* buf)
 
   switch (id)
   {
-    case SSCCP_COMMAND_ID:
+    case YACP_COMMAND_ID:
       device_id = buf[0] >> 4;
       message_type = buf[0] & 0x0F;
       var_start = buf[1];

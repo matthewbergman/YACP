@@ -15,8 +15,7 @@
 
 #include <stdint.h>
 
-#define SSCCP_COMMAND_ID 0x100
-#define SSCCP_UPDATE_ID 0x101
+#define YACP_UPDATE_ID 0x101
 
 #define CAL_UPDATE_SETTING 0
 #define CAL_READ_SETTING 1
@@ -35,6 +34,5 @@
 void load_defaults();
 void load_settings();
 void save_settings();
-void handle_can(uint32_t id, uint8_t* buf);
 
 #endif

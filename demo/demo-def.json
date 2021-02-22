@@ -30,7 +30,8 @@
 		},
 		{
 			"name": "counter",
-			"type": "uint8"
+			"type": "uint8",
+			"unit":	"counts"
 		}
 	],
 	"settings": [
@@ -77,7 +78,8 @@
 		{
 			"name": "setting_f",
 			"type": "float",
-			"default": "56.1234"
+			"default": "56.1234",
+			"unit":	"V"
 		}
 	],
 	"overrides": [

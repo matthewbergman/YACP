@@ -15,9 +15,12 @@
 #define YACP_API_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define CAL_PASSTHRU 0
 #define CAL_OVERRIDDEN 1
+
+#define YACP_COMMAND_ID 0x100
 
 // Remote data
 extern bool yacp_eeprom_version_mismatch_f;
@@ -55,6 +58,12 @@ void can_send(uint32_t id, uint8_t* buf);
 // Called frequenty to check if new CAN messages have arrived from main code.
 // Calls handle_can() when messages are received.
 void yacp_can_recv();
+
+// Initialize mailboxes
+void yacp_can_init();
+
+// Handle a CAN message
+void handle_can(uint32_t id, uint8_t* buf);
 
 // Returns one byte of data from EEPROM address addr.
 uint8_t eeprom_load_byte(uint16_t addr);
