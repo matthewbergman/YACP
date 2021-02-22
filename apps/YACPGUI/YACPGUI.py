@@ -254,15 +254,16 @@ class CANThread(QThread):
                 traceback.print_exc()
     
 class Measurement:
-    def __init__(self, name, cal_type, offset, index):
+    def __init__(self, name, cal_type, unit, offset, index):
         self.name = name
         self.cal_type = cal_type
         self.value = 0
+        self.unit = unit
         self.offset = offset
         self.index = index
 
 class Setting:
-    def __init__(self, name, value, cal_type, default_value, offset, index):
+    def __init__(self, name, value, cal_type, unit, default_value, offset, index):
         self.name = name
         self.cal_type = cal_type
         if value != None:
@@ -272,16 +273,18 @@ class Setting:
         else:
             self.value = 0
         self.choices = {}
+        self.unit = unit
         self.offset = offset
         self.index = index
 
 class Override:
-    def __init__(self, name, cal_type, offset, index):
+    def __init__(self, name, cal_type, unit, offset, index):
         self.name = name
         self.cal_type = cal_type
         self.offset = offset
         self.status = "Passthrough"
         self.value = 0
+        self.unit = unit
         self.index = index
 
 class Form(QMainWindow):
@@ -478,28 +481,32 @@ class Form(QMainWindow):
 
         # Measurements / Settings / Overrides
 
-        self.measurements_table = QTableWidget(0, 3)
+        self.measurements_table = QTableWidget(0, 4)
         self.measurements_table.verticalHeader().hide()
         self.measurements_table.setHorizontalHeaderItem(0, QTableWidgetItem("Measurement"))
         self.measurements_table.setHorizontalHeaderItem(1, QTableWidgetItem("Value"))
         self.measurements_table.setHorizontalHeaderItem(2, QTableWidgetItem("Type"))
+        self.measurements_table.setHorizontalHeaderItem(3, QTableWidgetItem("Unit"))
         form_lbx.addWidget(self.measurements_table)
 
 
-        self.settings_table = QTableWidget(0, 3)
+        self.settings_table = QTableWidget(0, 5)
         self.settings_table.verticalHeader().hide()
         self.settings_table.setHorizontalHeaderItem(0, QTableWidgetItem("Setting"))
         self.settings_table.setHorizontalHeaderItem(1, QTableWidgetItem("Value"))
         self.settings_table.setHorizontalHeaderItem(2, QTableWidgetItem("Type"))
+        self.settings_table.setHorizontalHeaderItem(3, QTableWidgetItem("Unit"))
+        self.settings_table.setHorizontalHeaderItem(4, QTableWidgetItem("Default"))
         self.settings_table.cellChanged.connect(self.on_setting_change)
         form_lbx.addWidget(self.settings_table)
 
-        self.overrides_table = QTableWidget(0, 4)
+        self.overrides_table = QTableWidget(0, 5)
         self.overrides_table.verticalHeader().hide()
         self.overrides_table.setHorizontalHeaderItem(0, QTableWidgetItem("Override"))
         self.overrides_table.setHorizontalHeaderItem(1, QTableWidgetItem("Status"))
         self.overrides_table.setHorizontalHeaderItem(2, QTableWidgetItem("Value"))
         self.overrides_table.setHorizontalHeaderItem(3, QTableWidgetItem("Type"))
+        self.overrides_table.setHorizontalHeaderItem(4, QTableWidgetItem("Unit"))
         self.overrides_table.cellChanged.connect(self.on_override_change)
         form_lbx.addWidget(self.overrides_table)
         
@@ -523,6 +530,10 @@ class Form(QMainWindow):
             item = QTableWidgetItem(str(measurement.cal_type))
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.measurements_table.setItem(row, 2, item)
+
+            item = QTableWidgetItem(str(measurement.unit))
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.measurements_table.setItem(row, 3, item)
             row += 1
 
         row = 0
@@ -549,6 +560,14 @@ class Form(QMainWindow):
             item = QTableWidgetItem(setting.cal_type)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.settings_table.setItem(row, 2, item)
+
+            item = QTableWidgetItem(setting.unit)
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.settings_table.setItem(row, 3, item)
+
+            item = QTableWidgetItem(str(setting.value))
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.settings_table.setItem(row, 4, item)
             row += 1
         self.settings_table.cellChanged.connect(self.on_setting_change)
 
@@ -576,6 +595,10 @@ class Form(QMainWindow):
             item = QTableWidgetItem(override.cal_type)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.overrides_table.setItem(row, 3, item)
+
+            item = QTableWidgetItem(override.unit)
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.overrides_table.setItem(row, 4, item)
             row += 1
         self.overrides_table.cellChanged.connect(self.on_override_change)
 
@@ -654,22 +677,40 @@ class Form(QMainWindow):
             self.loadDefFile(fileName)
 
     def loadDefFile(self, fileName):
-        print("def: "+fileName)
+        self.measurements_table.setRowCount(0)
+        self.settings_table.setRowCount(0)
+        self.overrides_table.setRowCount(0)
+
+        self.measurements = {}
+        self.settings = {}
+        self.overrides = {}
+        
         with open(fileName, newline='\n') as def_file:
             defs = json.load(def_file)
 
             measurement_offset = 0
             override_offset = 0
             setting_offset = 0
+            revision = -1
 
             for m in defs["measurements"]:
-                measurement = Measurement(m["name"], m["type"], measurement_offset, self.num_measurements)
+                if "unit" not in m.keys():
+                    unit = ""
+                else:
+                    unit = m["unit"]
+                
+                measurement = Measurement(m["name"], m["type"], unit, measurement_offset, self.num_measurements)
                 self.measurements[measurement_offset] = measurement
                 measurement_offset += lengths[m["type"]]
                 self.num_measurements += 1
                 
             for s in defs["settings"]:
-                setting = Setting(s["name"], 0, s["type"], s["default"], setting_offset, self.num_settings)
+                if "unit" not in s.keys():
+                    unit = ""
+                else:
+                    unit = s["unit"]
+                    
+                setting = Setting(s["name"], None, s["type"], unit, s["default"], setting_offset, self.num_settings)
 
                 if "choices" in s.keys():
                     for choice in s["choices"]:
@@ -679,11 +720,21 @@ class Form(QMainWindow):
                 setting_offset += lengths[s["type"]]
                 self.num_settings += 1
 
+                if s["name"] == 'revision':
+                    revision = s["default"]
+
             for o in defs["overrides"]:
-                override = Override(o["name"], o["type"], override_offset, self.num_overrides)
+                if "unit" not in o.keys():
+                    unit = ""
+                else:
+                    unit = o["unit"]
+                    
+                override = Override(o["name"], o["type"], unit, override_offset, self.num_overrides)
                 self.overrides[override_offset] = override
                 override_offset += 5
                 self.num_overrides += 1
+
+            self.setWindowTitle("YACP Cal // Def: "+fileName+" REVISION: "+str(revision))
 
             self.btn_hello.setEnabled(True)
             self.calOpenAct.setEnabled(True)
@@ -692,7 +743,7 @@ class Form(QMainWindow):
             self.config["RecentDefs"][os.path.basename(fileName)] = fileName
             self.recentDefFiles[os.path.basename(fileName)] = fileName
             self.projectPath = os.path.split(fileName)[0]
-                      
+
             self.update_widgets()
 
     def getValueFromBytes(self,cal_type,b0,b1,b2,b3):
@@ -843,7 +894,15 @@ class Form(QMainWindow):
                 for i in range(0, self.num_settings):
                     setting_key = [*self.settings][i]
                     setting = self.settings[setting_key]
-                    writer.writerow([setting.name,setting.value])
+
+                    label = ""
+                    if len(setting.choices) != 0:
+                        for choice in setting.choices.keys():
+                            if str(choice) == str(setting.value):
+                                label = setting.choices[choice]
+                                break
+                        
+                    writer.writerow([setting.name,setting.value,setting.cal_type,setting.unit,label])
 
                 self.statusBar().showMessage("Cal saved to "+fileName)
 
@@ -855,12 +914,13 @@ class Form(QMainWindow):
             self.loadCalFile(fileName)
 
     def loadCalFile(self, fileName):
-        print("cal: "+fileName)
         with open(fileName, newline='\n') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='"')
             for row in reader:
                 name = row[0]
                 str_val = row[1]
+                str_type = row[2]
+                str_unit = row[3]
 
                 for offset in self.settings:
                     if self.settings[offset].name != name:
