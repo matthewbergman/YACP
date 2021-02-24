@@ -258,6 +258,7 @@ class Measurement:
         self.name = name
         self.cal_type = cal_type
         self.value = 0
+        self.values = {}
         self.unit = unit
         self.offset = offset
         self.index = index
@@ -523,7 +524,13 @@ class Form(QMainWindow):
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.measurements_table.setItem(row, 0, item)
 
-            item = QTableWidgetItem(str(measurement.value))
+            val = str(measurement.value)
+            for value in measurement.values.keys():
+                if val == value:
+                    val = measurement.values[value]
+                    break
+
+            item = QTableWidgetItem(val)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.measurements_table.setItem(row, 1, item)
 
@@ -700,6 +707,11 @@ class Form(QMainWindow):
                     unit = m["unit"]
                 
                 measurement = Measurement(m["name"], m["type"], unit, measurement_offset, self.num_measurements)
+
+                if "values" in m.keys():
+                    for value in m["values"]:
+                        measurement.values[value["value"]] = value["name"]
+                
                 self.measurements[measurement_offset] = measurement
                 measurement_offset += lengths[m["type"]]
                 self.num_measurements += 1
@@ -796,8 +808,14 @@ class Form(QMainWindow):
         value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
 
         self.measurements[var_start].value = value
+
+        val = str(self.measurements[var_start].value)
+        for value in self.measurements[var_start].values.keys():
+            if val == value:
+                val = self.measurements[var_start].values[value]
+                break
         
-        self.measurements_table.item(table_index, 1).setText(str(value))
+        self.measurements_table.item(table_index, 1).setText(val)
 
     @pyqtSlot(int,int,int,int,int,int)
     def updateSetting(self, var_start, var_len, b0,b1,b2,b3):

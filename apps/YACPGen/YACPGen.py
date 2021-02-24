@@ -14,6 +14,7 @@ See license.txt at the root of the repository for full license text.
 
 import json
 import sys
+import re
 
 lengths = {}
 lengths["uint8"] = 1
@@ -33,20 +34,25 @@ types_c["uint32"] = "uint32_t"
 types_c["int32"] = "int32_t"
 types_c["float"] = "float"
 
+re_spaces = re.compile('([\W]+)')
+def name_to_identifier(name):
+    return re_spaces.sub('_', name.strip()).upper()
+
 def header_start(rev):
     hfile.write("/* THIS IS GENERATED CODE FROM THE YACP PROJECT. DO NOT MODIFY! */\n\n")
     hfile.write("#ifndef YACP_CAL_H_\n")
     hfile.write("#define YACP_CAL_H_\n\n")
     hfile.write("#include \"yacp_api.h\"\n\n")
     hfile.write("#define CAL_REVISION "+rev+"\n\n")
-    
 
 def measurements_start():
     hfile.write("typedef struct __attribute__((packed)) cal_measurements\n")
     hfile.write("{\n")
 
-def measurements_var(name,cal_type):
-    hfile.write("\t"+types_c[cal_type]+" "+name+";\n")
+def measurements_var(name,cal_type,unit):
+    if unit != "":
+        unit = " // "+unit
+    hfile.write("\t"+types_c[cal_type]+" "+name+";"+unit+"\n")
 
 def measurements_end():
     hfile.write("} cal_measurements;\n\n")
@@ -56,8 +62,10 @@ def settings_start():
     hfile.write("typedef struct __attribute__((packed)) cal_settings\n")
     hfile.write("{\n")
 
-def settings_var(name,cal_type):
-    hfile.write("\t"+types_c[cal_type]+" "+name+";\n")
+def settings_var(name,cal_type,unit):
+    if unit != "":
+        unit = " // "+unit
+    hfile.write("\t"+types_c[cal_type]+" "+name+";"+unit+"\n")
 
 def settings_end():
     hfile.write("} cal_settings;\n\n")
@@ -67,8 +75,10 @@ def override_start():
     hfile.write("typedef struct __attribute__((packed)) cal_overrides\n")
     hfile.write("{\n")
 
-def override_var(name):
-    hfile.write("\tcal_override "+name+";\n")
+def override_var(name,unit):
+    if unit != "":
+        unit = " // "+unit
+    hfile.write("\tcal_override "+name+";"+unit+"\n")
 
 def override_end():
     hfile.write("} cal_overrides;\n\n")
@@ -96,6 +106,9 @@ def impl_var(var,val):
 def impl_end():
     cfile.write("}\n")
 
+
+def choice_enum(name, val):
+    hfile.write("#define "+name+" "+val+"\n")
 
 if len(sys.argv) != 2:
     print("Usage: YACP_gen.py ./path/to/project-def.json")
@@ -136,19 +149,48 @@ except:
 
 header_start(rev)
 
+written = False
+for measurement in defs["measurements"]:
+    if "values" in measurement.keys():
+        for value in measurement["values"]:
+            name = name_to_identifier(measurement["name"]+"_VALUE_"+value["name"])
+            choice_enum(name, value["value"])
+            written = True
+if written:
+    hfile.write("\n")
+
+written = False
+for setting in defs["settings"]:
+    if "choices" in setting.keys():
+        for choice in setting["choices"]:
+            name = name_to_identifier(setting["name"]+"_CHOICE_"+choice["name"])
+            choice_enum(name, choice["value"])
+            written = True
+if written:
+    hfile.write("\n")
+
 measurements_start()
 for measurement in defs["measurements"]:
-    measurements_var(measurement["name"], measurement["type"])
+    unit = ""
+    if "unit" in measurement.keys():
+        unit = measurement["unit"]
+    measurements_var(measurement["name"], measurement["type"], unit)
 measurements_end()
 
 settings_start()
 for setting in defs["settings"]:
-    settings_var(setting["name"], setting["type"])
+    unit = ""
+    if "unit" in setting.keys():
+        unit = setting["unit"]
+    settings_var(setting["name"], setting["type"], unit)
 settings_end()
 
 override_start()
 for override in defs["overrides"]:
-    override_var(override["name"])
+    unit = ""
+    if "unit" in override.keys():
+        unit = override["unit"]
+    override_var(override["name"], unit)
 override_end()
 
 header_end()
