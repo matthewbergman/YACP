@@ -19,8 +19,6 @@
 CAN_message_t can_out_msg;
 CAN_message_t can_in_msg;
 
-void yacp_can_init() {}
-
 void can_send(uint32_t id, uint8_t* buf)
 {
   can_out_msg.ext = 0;

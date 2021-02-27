@@ -63,7 +63,7 @@
 		{
 			"name": "setting_i8",
 			"type": "int8",
-			"default": "-254"
+			"default": "-127"
 		},
 		{
 			"name": "setting_i16",

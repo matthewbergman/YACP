@@ -17,8 +17,12 @@
 
 // Vars
 extern calibration cal;
+
+uint8_t yacp_product_firmware_version;
+uint8_t yacp_product_id;
 bool yacp_eeprom_version_mismatch_f;
 bool yacp_eeprom_crc_mismatch_f;
+
 
 // Internal function declarations
 void send_measurement(uint16_t measurement_start, uint8_t var_len);
@@ -173,10 +177,11 @@ void send_hello()
   buf[1] = 0;
   buf[2] = 0;
   buf[3] = 0;
-  buf[4] = 0;
-  buf[5] = 0;
-  buf[6] = 0;
-  buf[7] = 0;
+
+  buf[4] = yacp_product_firmware_version;
+  buf[5] = yacp_product_id;
+  buf[6] = CAL_REVISION;
+  buf[7] = CAL_PROTOCOL_VERSION;
     
   can_send(YACP_UPDATE_ID, buf);
 }

@@ -37,6 +37,8 @@ To use YACP in your project you need the API files as well as driver code for yo
 
 // The calibration struct is declared in cal.c
 extern calibration cal;
+const uint8_t yacp_product_firmware_version = FIRMWARE_VERSION; // The firmware version for the project, informational
+const uint8_t yacp_product_id = PRODUCT_ID;						// Used to filter different YACP devices on a CAN bus
 
 void project_init() {
     ...

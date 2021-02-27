@@ -80,7 +80,7 @@ class CANThread(QThread):
     update_measurement_signal = pyqtSignal(int,int,int,int,int,int)
     update_setting_signal = pyqtSignal(int,int,int,int,int,int)
     update_override_signal = pyqtSignal(bool,int,int,int,int,int,int)
-    update_hello_signal = pyqtSignal(int)
+    update_hello_signal = pyqtSignal(int,int,int,int,int)
     send_status_signal = pyqtSignal(int)
     
     def __init__(self):
@@ -120,7 +120,16 @@ class CANThread(QThread):
                         var_len = msg.data[3]
 
                         if message_type == CAL_HELLO:
-                            self.update_hello_signal.emit(device_id)
+                            # TODO: parse data
+                            # add object for YACP devices
+                            # add filter for product IDs
+
+                            firmware_version = msg.data[4]
+                            product_id = msg.data[5]
+                            cal_revision = msg.data[6]
+                            cal_protocol = msg.data[7]
+                            
+                            self.update_hello_signal.emit(device_id, firmware_version, product_id, cal_revision, cal_protocol)
 
                         if device_id != self.device_id:
                             continue
@@ -847,8 +856,8 @@ class Form(QMainWindow):
             self.overrides[var_start].status = "Passthrough"
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Passthrough")
         
-    @pyqtSlot(int)
-    def updateDeviceList(self, device_id):
+    @pyqtSlot(int,int,int,int,int)
+    def updateDeviceList(self, device_id, firmware_version, product_id, cal_revision, cal_protocol):
         self.combo_devices.addItem(str(device_id))
         self.btn_device_connect.setEnabled(True)
 

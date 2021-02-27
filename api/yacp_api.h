@@ -22,6 +22,8 @@
 
 #define YACP_COMMAND_ID 0x100
 
+#define CAL_PROTOCOL_VERSION 1
+
 // Remote data
 extern bool yacp_eeprom_version_mismatch_f;
 extern bool yacp_eeprom_crc_mismatch_f;
