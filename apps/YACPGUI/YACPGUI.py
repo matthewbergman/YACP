@@ -10,12 +10,8 @@ MIT license, all text above must be included in any redistribution.
 See license.txt at the root of the repository for full license text.
 """
 
-import can
 import time
 import sys
-import csv
-import json
-import struct
 import configparser
 import os
 import traceback
@@ -48,322 +44,37 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtGui import QIcon
 
-lengths = {}
-lengths["uint8"] = 1
-lengths["int8"] = 1
-lengths["uint16"] = 2
-lengths["int16"] = 2
-lengths["uint32"] = 4
-lengths["int32"] = 4
-lengths["float"] = 4
+from yacp import YACPProtocol, CANThread, Measurement, Setting, Override, Device
 
-SSCCP_COMMAND_ID = 0x100
-SSCCP_UPDATE_ID = 0x101
+class YACPGUI(QMainWindow):
 
-CAL_UPDATE_SETTING = 0
-CAL_READ_SETTING = 1
-CAL_OVERRIDE_ON = 2
-CAL_OVERRIDE_OFF = 3
-CAL_READ_OVERRIDE = 4
-CAL_READ_MEASUREMENT = 5
-CAL_SAVE_SETTINGS = 6
-CAL_HELLO = 7
-CAL_ACK = 8
-
-DEVICE_STATE_DISCONNECTED = 0
-DEVICE_STATE_READING_SETTINGS = 1
-DEVICE_STATE_READING_OVERRIDES = 2
-DEVICE_STATE_READING_MEASUREMENTS = 3
-DEVICE_STATE_CONNECTED = 4
-
-class CANThread(QThread):
-    update_measurement_signal = pyqtSignal(int,int,int,int,int,int)
-    update_setting_signal = pyqtSignal(int,int,int,int,int,int)
-    update_override_signal = pyqtSignal(bool,int,int,int,int,int,int)
-    update_hello_signal = pyqtSignal(int,int,int,int,int)
-    send_status_signal = pyqtSignal(int)
-    
-    def __init__(self):
-        self.bus = None
-        self.device_id = -1
-        self.stop = False
-        
-        QThread.__init__(self)
-
-    def connect(self, _type, _channel, _bitrate):
-        try:
-            self.bus = can.interface.Bus(bustype=_type, channel=_channel, bitrate=_bitrate)
-            self.send_status_signal.emit(0)
-        except:
-            self.bus = None
-            traceback.print_exc()
-            self.send_status_signal.emit(1)
-
-    def disconnect(self):
-        try:
-            self.bus.shutdown()
-            self.send_status_signal.emit(2)
-        except:
-            pass
-        self.bus = None
-
-    # run method gets called when we start the thread
-    def run(self):
-        while self.stop == False:
-            if self.bus != None:
-                for msg in self.bus:
-                    if msg.arbitration_id == SSCCP_UPDATE_ID:
-                        device_id = msg.data[0] >> 4
-                        message_type = msg.data[0] & 0x0F
-                        var_start = msg.data[1]
-                        var_start |= msg.data[2] << 8
-                        var_len = msg.data[3]
-
-                        if message_type == CAL_HELLO:
-                            # TODO: parse data
-                            # add object for YACP devices
-                            # add filter for product IDs
-
-                            firmware_version = msg.data[4]
-                            product_id = msg.data[5]
-                            cal_revision = msg.data[6]
-                            cal_protocol = msg.data[7]
-                            
-                            self.update_hello_signal.emit(device_id, firmware_version, product_id, cal_revision, cal_protocol)
-
-                        if device_id != self.device_id:
-                            continue
-
-                        if message_type == CAL_READ_MEASUREMENT:               
-                            self.update_measurement_signal.emit(var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
-                        elif message_type == CAL_READ_SETTING:
-                            self.update_setting_signal.emit(var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
-                        elif message_type == CAL_OVERRIDE_ON:
-                            self.update_override_signal.emit(True,var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
-                        elif message_type == CAL_OVERRIDE_OFF:
-                            self.update_override_signal.emit(False,var_start,var_len,msg.data[4],msg.data[5],msg.data[6],msg.data[7])
-
-    @pyqtSlot(int)
-    def setDeviceId(self, device_id):
-        self.device_id = device_id
-
-    @pyqtSlot(int,int,int,int,int,int)
-    def setSetting(self, var_start, var_len, b0,b1,b2,b3):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg_data[0] = (self.device_id << 4) | CAL_UPDATE_SETTING
-        msg_data[1] = var_start & 0xFF
-        msg_data[2] = var_start >> 8
-        msg_data[3] = var_len
-        msg_data[4] = b0
-        msg_data[5] = b1
-        msg_data[6] = b2
-        msg_data[7] = b3
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    @pyqtSlot(int,int,int,int,int,int,int)
-    def setOverride(self, enabled, var_start, var_len, b0,b1,b2,b3):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        if enabled == True:
-            msg_data[0] = (self.device_id << 4) | CAL_OVERRIDE_ON
-        else:
-            msg_data[0] = (self.device_id << 4) | CAL_OVERRIDE_OFF
-        msg_data[1] = var_start & 0xFF
-        msg_data[2] = var_start >> 8
-        msg_data[3] = var_len
-        msg_data[4] = b0
-        msg_data[5] = b1
-        msg_data[6] = b2
-        msg_data[7] = b3
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    @pyqtSlot()
-    def sendHello(self):
-        msg_data = [CAL_HELLO,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                traceback.print_exc()
-
-    @pyqtSlot()
-    def sendSaveSettings(self):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg_data[0] = (self.device_id << 4) | CAL_SAVE_SETTINGS
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    @pyqtSlot(int,int)
-    def readMeasurement(self, var_start, var_len):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg_data[0] = (self.device_id << 4) | CAL_READ_MEASUREMENT
-        msg_data[1] = var_start & 0xFF
-        msg_data[2] = var_start >> 8
-        msg_data[3] = var_len
-        msg_data[4] = 0
-        msg_data[5] = 0
-        msg_data[6] = 0
-        msg_data[7] = 0
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    @pyqtSlot(int,int)
-    def readSetting(self, var_start, var_len):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg_data[0] = (self.device_id << 4) | CAL_READ_SETTING
-        msg_data[1] = var_start & 0xFF
-        msg_data[2] = var_start >> 8
-        msg_data[3] = var_len
-        msg_data[4] = 0
-        msg_data[5] = 0
-        msg_data[6] = 0
-        msg_data[7] = 0
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    @pyqtSlot(int,int)
-    def readOverride(self, var_start, var_len):
-        msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = SSCCP_COMMAND_ID
-
-        msg_data[0] = (self.device_id << 4) | CAL_READ_OVERRIDE
-        msg_data[1] = var_start & 0xFF
-        msg_data[2] = var_start >> 8
-        msg_data[3] = var_len
-        msg_data[4] = 0
-        msg_data[5] = 0
-        msg_data[6] = 0
-        msg_data[7] = 0
-
-        self.sendCANMessage(msg_id, msg_data)
-
-    def sendCANMessage(self, msg_id, msg_data):
-        if self.device_id == -1:
-            return
-        
-        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
-        if self.bus != None:
-            try:
-                self.bus.send(msg, 1)
-            except:
-                traceback.print_exc()
-    
-class Measurement:
-    def __init__(self, name, cal_type, unit, offset, index):
-        self.name = name
-        self.cal_type = cal_type
-        self.value = 0
-        self.values = {}
-        self.unit = unit
-        self.offset = offset
-        self.index = index
-
-class Setting:
-    def __init__(self, name, value, cal_type, unit, default_value, offset, index):
-        self.name = name
-        self.cal_type = cal_type
-        if value != None:
-            self.value = value
-        elif default_value != None:
-            self.value = default_value
-        else:
-            self.value = 0
-        self.choices = {}
-        self.unit = unit
-        self.offset = offset
-        self.index = index
-
-class Override:
-    def __init__(self, name, cal_type, unit, offset, index):
-        self.name = name
-        self.cal_type = cal_type
-        self.offset = offset
-        self.status = "Passthrough"
-        self.value = 0
-        self.unit = unit
-        self.index = index
-
-class Form(QMainWindow):
-    set_setting_signal = pyqtSignal(int,int,int,int,int,int)
-    set_override_signal = pyqtSignal(int,int,int,int,int,int,int)
-    send_hello_signal = pyqtSignal()
-    save_settings_signal = pyqtSignal()
-    set_device_id_signal = pyqtSignal(int)
-    read_measurement_signal = pyqtSignal(int,int)
-    read_setting_signal = pyqtSignal(int,int)
-    read_override_signal = pyqtSignal(int,int)
-    
     def __init__(self):
         super().__init__()
-
-        self.can_state = 0
-        self.device_state = DEVICE_STATE_DISCONNECTED
-        self.read_measurement_index = 0
-        self.read_setting_index = 0
-        self.read_override_index = 0
-        self.device_id = -1
-        self.projectPath = ""
-
-        self.measurements = {}
-        self.overrides = {}
-        self.settings = {}
         
-        self.num_measurements = 0
-        self.num_settings = 0
-        self.num_overrides = 0
+        self.projectPath = ""
 
         self.config = configparser.ConfigParser()
         self.recentDefFiles = {}
         self.recentCalFiles = {}
+        
         self.readConfig()
 	
         self.init_widget()
 
-        self.can_thread = CANThread()
+        self.yacp = YACPProtocol()
         
-        self.can_thread.update_measurement_signal.connect(self.updateMeasurement)
-        self.can_thread.update_setting_signal.connect(self.updateSetting)
-        self.can_thread.update_override_signal.connect(self.updateOverride)
-        self.can_thread.update_hello_signal.connect(self.updateDeviceList)
-        self.can_thread.send_status_signal.connect(self.handleCANStatus)
-        
-        self.set_setting_signal.connect(self.can_thread.setSetting)
-        self.set_override_signal.connect(self.can_thread.setOverride)
-        self.send_hello_signal.connect(self.can_thread.sendHello)
-        self.save_settings_signal.connect(self.can_thread.sendSaveSettings)
-        self.set_device_id_signal.connect(self.can_thread.setDeviceId)
-        self.read_measurement_signal.connect(self.can_thread.readMeasurement)
-        self.read_setting_signal.connect(self.can_thread.readSetting)
-        self.read_override_signal.connect(self.can_thread.readOverride)
-
-        self.can_thread.start()
-
-        self.timer = QTimer(self) 
-        self.timer.timeout.connect(self.tick) 
-        self.timer.start(20)
+        self.yacp.app_update_device_state_signal.connect(self.updateDeviceState)
+        self.yacp.app_update_measurement_signal.connect(self.updateMeasurement)
+        self.yacp.app_update_setting_signal.connect(self.updateSetting)
+        self.yacp.app_update_override_signal.connect(self.updateOverride)
+        self.yacp.app_update_devices_signal.connect(self.updateDeviceList)
+        self.yacp.app_update_can_status_signal.connect(self.updateCANStatus)
 
         self.show()
 
     def closeEvent(self, event):
-        self.timer.stop()
-        self.can_thread.disconnect()
-        self.can_thread.stop = True
         self.saveConfig()
-        self.can_thread.wait()
+        self.yacp.close()
 
     def readConfig(self):
         inifile = self.config.read('yacp.ini')
@@ -397,7 +108,6 @@ class Form(QMainWindow):
     def init_widget(self):
         self.setWindowTitle("YACP Cal")
         self.statusBar().showMessage('Disconnected')
-
 
         menubar = self.menuBar()
         
@@ -499,7 +209,6 @@ class Form(QMainWindow):
         self.measurements_table.setHorizontalHeaderItem(3, QTableWidgetItem("Unit"))
         form_lbx.addWidget(self.measurements_table)
 
-
         self.settings_table = QTableWidget(0, 5)
         self.settings_table.verticalHeader().hide()
         self.settings_table.setHorizontalHeaderItem(0, QTableWidgetItem("Setting"))
@@ -521,13 +230,13 @@ class Form(QMainWindow):
         form_lbx.addWidget(self.overrides_table)
         
     def update_widgets(self):
-        self.measurements_table.setRowCount(self.num_measurements)
-        self.settings_table.setRowCount(self.num_settings)
-        self.overrides_table.setRowCount(self.num_overrides)
+        self.measurements_table.setRowCount(self.yacp.num_measurements)
+        self.settings_table.setRowCount(self.yacp.num_settings)
+        self.overrides_table.setRowCount(self.yacp.num_overrides)
         
         row = 0
-        for offset in self.measurements:
-            measurement = self.measurements[offset]
+        for offset in self.yacp.measurements:
+            measurement = self.yacp.measurements[offset]
 
             item = QTableWidgetItem(measurement.name)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
@@ -554,8 +263,8 @@ class Form(QMainWindow):
 
         row = 0
         self.settings_table.cellChanged.disconnect()
-        for offset in self.settings:
-            setting = self.settings[offset]
+        for offset in self.yacp.settings:
+            setting = self.yacp.settings[offset]
 
             item = QTableWidgetItem(setting.name)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
@@ -589,8 +298,8 @@ class Form(QMainWindow):
 
         row = 0
         self.overrides_table.cellChanged.disconnect()
-        for offset in self.overrides:
-            override = self.overrides[offset]
+        for offset in self.yacp.overrides:
+            override = self.yacp.overrides[offset]
 
             item = QTableWidgetItem(override.name)
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
@@ -622,41 +331,21 @@ class Form(QMainWindow):
         if column != 1 or table_index == None:
             return
 
-        setting_key = [*self.settings][table_index]
-        setting = self.settings[setting_key]
-
-        if setting.cal_type == 'float':
-            setting.value = float(self.settings_table.item(table_index, column).text())
-        else:
-            setting.value = int(self.settings_table.item(table_index, column).text())
-
-        [b0,b1,b2,b3] = self.getBytesFromValue(setting.cal_type, setting.value)
-
-        self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
-
+        setting_key = [*self.yacp.settings][table_index]
+        str_val = self.settings_table.item(table_index, column).text()
+        
+        self.yacp.sendSettingChange(setting_key, str_val)
+        
     def on_override_change(self, table_index, column):
         if column != 2 or table_index == None:
             return
 
         override_key = [*self.overrides][table_index]
-        override = self.overrides[override_key]
+        str_val = self.overrides_table.item(table_index, 2).text()
+        override_status = self.overrides_table.cellWidget(table_index, 1).currentText()
+
+        self.yacp.sendOverrideChange(override_key, str_val, override_status)
         
-        if override.cal_type == 'float':
-            override.value = float(self.overrides_table.item(table_index, 2).text())
-        else:
-            override.value = int(self.overrides_table.item(table_index, 2).text())
-
-        override.status = self.overrides_table.cellWidget(table_index, 1).currentText()
-        enabled = False
-        if override.status == "Overridden":
-            enabled = True
-
-        [b0,b1,b2,b3] = self.getBytesFromValue(override.cal_type, override.value)
-
-        #print(str(enabled)+" "+str(b0)+" "+str(b1)+" "+str(b2)+" "+str(b3)+" "+str(override.value))
-
-        self.set_override_signal.emit(enabled, override.offset, lengths[override.cal_type], b0,b1,b2,b3)
-
     def on_override_status_change(self):
         combo = self.sender()
         table_index = combo.property('row')
@@ -669,20 +358,10 @@ class Form(QMainWindow):
         if table_index == None:
             return
 
-        setting_key = [*self.settings][table_index]
-        setting = self.settings[setting_key]
+        setting_key = [*self.yacp.settings][table_index]
         choice = combo.currentData()
 
-        if setting.cal_type == 'float':
-            setting.value = float(choice)
-        else:
-            setting.value = int(choice)
-
-        print("Set value to "+str(setting.value))
-
-        [b0,b1,b2,b3] = self.getBytesFromValue(setting.cal_type, setting.value)
-
-        self.set_setting_signal.emit(setting.offset, lengths[setting.cal_type], b0,b1,b2,b3)
+        self.yacp.sendSettingChange(setting_key, choice)
         
 
     def loadDefFileDialog(self):
@@ -696,217 +375,75 @@ class Form(QMainWindow):
         self.measurements_table.setRowCount(0)
         self.settings_table.setRowCount(0)
         self.overrides_table.setRowCount(0)
+                
+        revision = self.yacp.loadDefFile(fileName)
 
-        self.measurements = {}
-        self.settings = {}
-        self.overrides = {}
+        if revision == -1:
+            print("No revision found...")
+            return
+
+        self.setWindowTitle("YACP Cal // Def: "+fileName+" REVISION: "+str(revision))
+
+        self.btn_hello.setEnabled(True)
+        self.calOpenAct.setEnabled(True)
+        self.recentCalMenu.setEnabled(True)
+                
+        self.config["RecentDefs"][os.path.basename(fileName)] = fileName
+        self.recentDefFiles[os.path.basename(fileName)] = fileName
+        self.projectPath = os.path.split(fileName)[0]
+        self.saveConfig()
+
+        self.update_widgets()
         
-        with open(fileName, newline='\n') as def_file:
-            defs = json.load(def_file)
-
-            measurement_offset = 0
-            override_offset = 0
-            setting_offset = 0
-            revision = -1
-
-            for m in defs["measurements"]:
-                if "unit" not in m.keys():
-                    unit = ""
-                else:
-                    unit = m["unit"]
-                
-                measurement = Measurement(m["name"], m["type"], unit, measurement_offset, self.num_measurements)
-
-                if "values" in m.keys():
-                    for value in m["values"]:
-                        measurement.values[value["value"]] = value["name"]
-                
-                self.measurements[measurement_offset] = measurement
-                measurement_offset += lengths[m["type"]]
-                self.num_measurements += 1
-                
-            for s in defs["settings"]:
-                if "unit" not in s.keys():
-                    unit = ""
-                else:
-                    unit = s["unit"]
-                    
-                setting = Setting(s["name"], None, s["type"], unit, s["default"], setting_offset, self.num_settings)
-
-                if "choices" in s.keys():
-                    for choice in s["choices"]:
-                        setting.choices[choice["value"]] = choice["name"]
-                
-                self.settings[setting_offset] = setting
-                setting_offset += lengths[s["type"]]
-                self.num_settings += 1
-
-                if s["name"] == 'revision':
-                    revision = s["default"]
-
-            for o in defs["overrides"]:
-                if "unit" not in o.keys():
-                    unit = ""
-                else:
-                    unit = o["unit"]
-                    
-                override = Override(o["name"], o["type"], unit, override_offset, self.num_overrides)
-                self.overrides[override_offset] = override
-                override_offset += 5
-                self.num_overrides += 1
-
-            self.setWindowTitle("YACP Cal // Def: "+fileName+" REVISION: "+str(revision))
-
-            self.btn_hello.setEnabled(True)
-            self.calOpenAct.setEnabled(True)
-            self.recentCalMenu.setEnabled(True)
-            
-            self.config["RecentDefs"][os.path.basename(fileName)] = fileName
-            self.recentDefFiles[os.path.basename(fileName)] = fileName
-            self.projectPath = os.path.split(fileName)[0]
-
-            self.update_widgets()
-
-    def getValueFromBytes(self,cal_type,b0,b1,b2,b3):
-        if cal_type == "uint8":
-            [typed_value] = struct.unpack('>B',bytes([b0]))
-        elif cal_type == "int8":
-            [typed_value] = struct.unpack('>b',bytes([b0]))
-        elif cal_type == "uint16":
-            [typed_value] = struct.unpack('>H',bytes([b1,b0]))
-        elif cal_type == "int16":
-            [typed_value] = struct.unpack('>h',bytes([b1,b0]))
-        elif cal_type == "uint32":
-            [typed_value] = struct.unpack('>I',bytes([b3,b2,b1,b0]))
-        elif cal_type == "int32":
-            [typed_value] = struct.unpack('>i',bytes([b3,b2,b1,b0]))
-        elif cal_type == "float":
-            [typed_value] = struct.unpack('>f',bytes([b3,b2,b1,b0]))
-
-        #print(str(b3)+" "+str(b2)+" "+str(b1)+" "+str(b0)+" = "+str(typed_value))
-            
-        return typed_value
-
-    def getBytesFromValue(self,cal_type,val):
-        if cal_type == "uint8":
-            bs = struct.pack('>B',val)
-        elif cal_type == "int8":
-            bs = struct.pack('>b',val)
-        elif cal_type == "uint16":
-            bs = struct.pack('>H',val)
-        elif cal_type == "int16":
-            bs = struct.pack('>h',val)
-        elif cal_type == "uint32":
-            bs = struct.pack('>I',val)
-        elif cal_type == "int32":
-            bs = struct.pack('>i',val)
-        elif cal_type == "float":
-            bs = struct.pack('>f',val)
-
-        ints = list(bs)
-        ints += [0] * (4 - len(ints))
-
-        #print(cal_type+" "+str(val)+" = "+str(ints[3])+" "+str(ints[2])+" "+str(ints[1])+" "+str(ints[0]))
-
-        return ints
-
-    @pyqtSlot(int,int,int,int,int,int)
-    def updateMeasurement(self, var_start, var_len, b0,b1,b2,b3):
-        table_index = self.measurements[var_start].index
-        cal_type = self.measurements[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
-
-        self.measurements[var_start].value = value
-
-        val = str(self.measurements[var_start].value)
-        for value in self.measurements[var_start].values.keys():
+    def updateMeasurement(self, table_index, offset):
+        measurement = self.yacp.measurements[offset]
+        val = str(measurement.value)
+        for value in measurement.values.keys():
             if val == value:
-                val = self.measurements[var_start].values[value]
+                val = measurement.values[value]
                 break
         
         self.measurements_table.item(table_index, 1).setText(val)
 
-    @pyqtSlot(int,int,int,int,int,int)
-    def updateSetting(self, var_start, var_len, b0,b1,b2,b3):
-        table_index = self.settings[var_start].index
-        cal_type = self.settings[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
-
-        self.settings[var_start].value = value
-
-        if len(self.settings[var_start].choices) == 0:
-            self.settings_table.item(table_index, 1).setText(str(value))
+    def updateSetting(self, table_index, offset):
+        setting = self.yacp.settings[offset]
+        if len(setting.choices) == 0:
+            self.settings_table.item(table_index, 1).setText(str(setting.value))
         else:
-            index = self.settings_table.cellWidget(table_index, 1).findData(value)
+            index = self.settings_table.cellWidget(table_index, 1).findData(setting.value)
             self.settings_table.cellWidget(table_index, 1).setCurrentIndex(index)
 
-    @pyqtSlot(bool,int,int,int,int,int,int)
-    def updateOverride(self, overridden, var_start, var_len, b0,b1,b2,b3):
-        table_index = self.overrides[var_start].index
-        cal_type = self.overrides[var_start].cal_type
-        value = self.getValueFromBytes(cal_type,b0,b1,b2,b3)
-
-        self.overrides[var_start].value = value
+    def updateOverride(self, table_index, offset, overridden):
+        override = self.yacp.overrides[offset]
         
-        self.overrides_table.item(table_index, 2).setText(str(value))
+        self.overrides_table.item(table_index, 2).setText(str(override.value))
         if overridden:
-            self.overrides[var_start].status = "Overridden"
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Overridden")
         else:
-            self.overrides[var_start].status = "Passthrough"
             self.overrides_table.cellWidget(table_index, 1).setCurrentText("Passthrough")
         
-    @pyqtSlot(int,int,int,int,int)
-    def updateDeviceList(self, device_id, firmware_version, product_id, cal_revision, cal_protocol):
-        self.combo_devices.addItem(str(device_id))
-        self.btn_device_connect.setEnabled(True)
+    def updateDeviceList(self):
+        self.combo_devices.clear()
+        
+        for device_id in self.yacp.devices:
+            self.combo_devices.addItem(str(device_id))
+
+        if len(self.yacp.devices) > 0:
+            self.btn_device_connect.setEnabled(True)
 
     def sendHello(self):
         self.combo_devices.clear()
-        self.send_hello_signal.emit()
+        self.btn_device_connect.setEnabled(False)
+        
+        self.yacp.sendHello()
 
     def deviceConnect(self):
         device_id = int(self.combo_devices.currentText())
         if device_id != None and device_id != "":
-            self.device_id = device_id
-            self.set_device_id_signal.emit(device_id)
-
-            self.read_measurement_index = 0
-            self.read_setting_index = 0
-            self.read_override_index = 0
-            self.device_state = DEVICE_STATE_READING_SETTINGS
-            
-            self.btn_save.setEnabled(True)
-
-    def readMeasurement(self):
-        measurement_key = [*self.measurements][self.read_measurement_index]
-        measurement = self.measurements[measurement_key]
-        
-        var_start = measurement.offset
-        var_len = lengths[measurement.cal_type]
-        
-        self.read_measurement_signal.emit(var_start, var_len)
-
-    def readSetting(self):
-        setting_key = [*self.settings][self.read_setting_index]
-        setting = self.settings[setting_key]
-        
-        var_start = setting.offset
-        var_len = lengths[setting.cal_type]
-        
-        self.read_setting_signal.emit(var_start, var_len)
-
-    def readOverride(self):
-        override_key = [*self.overrides][self.read_override_index]
-        override = self.overrides[override_key]
-        
-        var_start = override.offset
-        var_len = lengths[override.cal_type]
-        
-        self.read_override_signal.emit(var_start, var_len)
+            self.yacp.deviceConnect(device_id)
 
     def saveSettings(self):
-        self.save_settings_signal.emit()
+        self.yacp.saveSettings()
         self.exportSettingsCSV()
 
     def exportSettingsCSV(self):
@@ -914,24 +451,9 @@ class Form(QMainWindow):
         options |= QFileDialog.DontUseNativeDialog
         fileName, _ = QFileDialog.getSaveFileName(self,"Save Cal File",self.projectPath,"Cal Files (*.csv)", options=options)
         if fileName:
-            with open(fileName, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile, delimiter=',',quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['Name','Value'])
-
-                for i in range(0, self.num_settings):
-                    setting_key = [*self.settings][i]
-                    setting = self.settings[setting_key]
-
-                    label = ""
-                    if len(setting.choices) != 0:
-                        for choice in setting.choices.keys():
-                            if str(choice) == str(setting.value):
-                                label = setting.choices[choice]
-                                break
-                        
-                    writer.writerow([setting.name,setting.value,setting.cal_type,setting.unit,label])
-
-                self.statusBar().showMessage("Cal saved to "+fileName)
+            self.yacp.exportSettingsCSV(fileName)
+            
+            self.statusBar().showMessage("Cal saved to "+fileName)
 
     def loadCalFileDialog(self):
         options = QFileDialog.Options()
@@ -941,88 +463,46 @@ class Form(QMainWindow):
             self.loadCalFile(fileName)
 
     def loadCalFile(self, fileName):
-        with open(fileName, newline='\n') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-            for row in reader:
-                name = row[0]
-                str_val = row[1]
-                str_type = row[2]
-                str_unit = row[3]
+        self.yacp.loadCalFile(fileName)
+        
+        for offset in self.yacp.settings:
+            setting = self.yacp.settings[offset]
+            table_index = setting.index
 
-                for offset in self.settings:
-                    if self.settings[offset].name != name:
-                        continue
+            if len(setting.choices) == 0:
+                self.settings_table.item(table_index, 1).setText(str(setting.value))
+            else:
+                for choice in setting.choices.keys():
+                    if choice == str(setting.value):
+                        break
+                    i += 1
+                    
+                if i >= len(setting.choices):
+                    i = 0
+                
+                self.settings_table.cellWidget(table_index, 1).setCurrentIndex(i)
 
-                    f = False
-                    if self.settings[offset].cal_type == "float":
-                        self.settings[offset].value = float(str_val)
-                        f = True
-                    else:
-                        self.settings[offset].value = int(str_val)
-                        
-                    table_index = self.settings[offset].index
+        self.config["RecentCals"][os.path.basename(fileName)] = fileName
+        self.recentCalFiles[os.path.basename(fileName)] = fileName
+        self.projectPath = os.path.split(fileName)[0]
+        self.saveConfig()
 
-                    if len(self.settings[offset].choices) == 0:
-                        self.settings_table.item(table_index, 1).setText(str_val)
-                    else:
-                        for choice in self.settings[offset].choices.keys():
-                            if f == True:
-                                val = float(choice)
-                            else:
-                                val = int(choice)
-                            if val == self.settings[offset].value:
-                                break
-                            i += 1
-                            
-                        if i >= len(self.settings[offset].choices):
-                            i = 0
-                        
-                        self.settings_table.cellWidget(table_index, 1).setCurrentIndex(i)
-
-            self.config["RecentCals"][os.path.basename(fileName)] = fileName
-            self.recentCalFiles[os.path.basename(fileName)] = fileName
-            self.projectPath = os.path.split(fileName)[0]
-
-
-    def tick(self):
-        if self.device_state == DEVICE_STATE_DISCONNECTED:
+    def updateDeviceState(self):
+        if self.yacp.device_state == YACPProtocol.DEVICE_STATE_DISCONNECTED:
             pass
         
-        elif self.device_state == DEVICE_STATE_READING_SETTINGS:
-            self.statusBar().showMessage("Reading setting "+str(self.read_setting_index+1)+"/"+str(self.num_settings))        
-            self.readSetting()
-
-            self.read_setting_index += 1
-            if self.read_setting_index >= self.num_settings:
-                self.device_state = DEVICE_STATE_READING_OVERRIDES
-                self.read_setting_index = 0
-                
-        elif self.device_state == DEVICE_STATE_READING_OVERRIDES:
-            self.statusBar().showMessage("Reading override "+str(self.read_override_index+1)+"/"+str(self.num_overrides))
-            
-            self.readOverride()
-
-            self.read_override_index += 1
-            if self.read_override_index >= self.num_overrides:
-                self.device_state = DEVICE_STATE_READING_MEASUREMENTS
-                self.read_overrides_index = 0
+        elif self.yacp.device_state == YACPProtocol.DEVICE_STATE_READING_SETTINGS:
+            self.statusBar().showMessage("Reading setting "+str(self.yacp.read_setting_index+1)+"/"+str(self.yacp.num_settings))        
+                           
+        elif self.yacp.device_state == YACPProtocol.DEVICE_STATE_READING_OVERRIDES:
+            self.statusBar().showMessage("Reading override "+str(self.yacp.read_override_index+1)+"/"+str(self.yacp.num_overrides))
         
-        elif self.device_state == DEVICE_STATE_READING_MEASUREMENTS:
-            self.statusBar().showMessage("Reading measurement "+str(self.read_measurement_index+1)+"/"+str(self.num_measurements))
+        elif self.yacp.device_state == YACPProtocol.DEVICE_STATE_READING_MEASUREMENTS:
+            self.statusBar().showMessage("Reading measurement "+str(self.yacp.read_measurement_index+1)+"/"+str(self.yacp.num_measurements))
             
-            self.readMeasurement()
-
-            self.read_measurement_index += 1
-            if self.read_measurement_index >= self.num_measurements:
-                self.device_state = DEVICE_STATE_CONNECTED
-                self.statusBar().showMessage("Connected to device ID "+str(self.device_id))
-                self.read_measurement_index = 0
-            
-        elif self.device_state == DEVICE_STATE_CONNECTED:
-            self.readMeasurement()
-            self.read_measurement_index += 1
-            if self.read_measurement_index >= self.num_measurements:
-                self.read_measurement_index = 0
+        elif self.yacp.device_state == YACPProtocol.DEVICE_STATE_CONNECTED:
+            self.statusBar().showMessage("Connected to device ID "+str(self.yacp.device_id))
+            self.btn_save.setEnabled(True)
 
     def connect(self):
         bustype = self.combo_bustype.currentText()
@@ -1044,33 +524,23 @@ class Form(QMainWindow):
         elif bitrate == "1M":
             bitrate = 1000000
 
-        if self.can_state == 0:
+        if self.yacp.can_state == 0:
             self.statusBar().showMessage("Connecting...")
-            self.can_thread.connect(bustype, interface, bitrate)
-        elif self.can_state == 1:
+            self.yacp.connect(bustype, interface, bitrate, True)
+        elif self.yacp.can_state == 1:
             self.statusBar().showMessage("Disconnecting...")
-            self.can_thread.disconnect()
+            self.yacp.connect(bustype, interface, bitrate, False)
 
-    @pyqtSlot(int)
-    def handleCANStatus(self, status):
-        if status == 1:
-            self.statusBar().showMessage("Failed to find CAN device")
-            self.can_state = 0
-
-            self.btn_hello.setEnabled(False)
-            self.btn_device_connect.setEnabled(False)
-            self.btn_save.setEnabled(False)
-        if status == 0:
+    def updateCANStatus(self):
+        if self.yacp.can_state == 1:
             self.statusBar().showMessage("CAN device connected")
             self.btn_connect.setText("Disconnect")
-            self.can_state = 1
 
             self.combo_rate.setEnabled(False)
             self.combo_bustype.setEnabled(False)
-        if status == 2:
+        elif self.yacp.can_state == 0:
             self.statusBar().showMessage("CAN device disconnected")
             self.btn_connect.setText("Connect")
-            self.can_state = 0
             
             self.combo_rate.setEnabled(True)
             self.combo_bustype.setEnabled(True)
@@ -1082,9 +552,12 @@ class Form(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    
     excepthook = sys.excepthook
     sys.excepthook = lambda t, val, tb: excepthook(t, val, tb)
-    form = Form()
-    form.setGeometry(100, 100, 1900, 500)
-    form.show()
+    
+    gui = YACPGUI()
+    gui.setGeometry(100, 100, 1900, 500)
+    gui.show()
+    
     exit(app.exec_())
