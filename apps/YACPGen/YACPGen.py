@@ -12,6 +12,8 @@ MIT license, all text above must be included in any redistribution.
 See license.txt at the root of the repository for full license text.
 """
 
+VERSION = "1.0.0"
+
 import json
 import sys
 import re
@@ -111,7 +113,7 @@ def choice_enum(name, val):
     hfile.write("#define "+name+" "+val+"\n")
 
 if len(sys.argv) != 2:
-    print("Usage: YACP_gen.py ./path/to/project-def.json")
+    print("YACPgen "+VERSION+" Usage: YACPgen.exe ./path/to/project-def.json")
     sys.exit(1)
     
 def_filename = sys.argv[1]

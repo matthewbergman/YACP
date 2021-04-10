@@ -48,6 +48,8 @@ from yacp import YACPProtocol, CANThread, Measurement, Setting, Override, Device
 
 class YACPGUI(QMainWindow):
 
+    VERSION = "1.0.0"
+        
     def __init__(self):
         super().__init__()
         
@@ -106,7 +108,7 @@ class YACPGUI(QMainWindow):
             configfile.close()
         
     def init_widget(self):
-        self.setWindowTitle("YACP Cal")
+        self.setWindowTitle("YACP Cal "+self.VERSION)
         self.statusBar().showMessage('Disconnected')
 
         menubar = self.menuBar()
@@ -340,7 +342,7 @@ class YACPGUI(QMainWindow):
         if column != 2 or table_index == None:
             return
 
-        override_key = [*self.overrides][table_index]
+        override_key = [*self.yacp.overrides][table_index]
         str_val = self.overrides_table.item(table_index, 2).text()
         override_status = self.overrides_table.cellWidget(table_index, 1).currentText()
 
@@ -560,4 +562,4 @@ if __name__ == "__main__":
     gui.setGeometry(100, 100, 1900, 500)
     gui.show()
     
-    exit(app.exec_())
+    app.exec_()
