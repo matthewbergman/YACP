@@ -12,7 +12,7 @@ MIT license, all text above must be included in any redistribution.
 See license.txt at the root of the repository for full license text.
 """
 
-VERSION = "1.0.0"
+from version import VERSION
 
 import json
 import sys

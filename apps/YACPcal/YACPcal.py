@@ -44,11 +44,11 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtGui import QIcon
 
+from version import VERSION
+
 from yacp import YACPProtocol, CANThread, Measurement, Setting, Override, Device
 
-class YACPGUI(QMainWindow):
-
-    VERSION = "1.0.0"
+class YACPcal(QMainWindow):
         
     def __init__(self):
         super().__init__()
@@ -108,7 +108,7 @@ class YACPGUI(QMainWindow):
             configfile.close()
         
     def init_widget(self):
-        self.setWindowTitle("YACP Cal "+self.VERSION)
+        self.setWindowTitle("YACPcal "+VERSION)
         self.statusBar().showMessage('Disconnected')
 
         menubar = self.menuBar()
@@ -558,7 +558,7 @@ if __name__ == "__main__":
     excepthook = sys.excepthook
     sys.excepthook = lambda t, val, tb: excepthook(t, val, tb)
     
-    gui = YACPGUI()
+    gui = YACPcal()
     gui.setGeometry(100, 100, 1900, 500)
     gui.show()
     

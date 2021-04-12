@@ -156,7 +156,7 @@ class CANThread(QThread):
         msg_data = [0,0,0,0,0,0,0,0]
         msg_id = YACPProtocol.YACP_COMMAND_ID
 
-        msg_data[0] = (self.device_id << 4) | CAL_SAVE_SETTINGS
+        msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_SAVE_SETTINGS
 
         self.sendCANMessage(msg_id, msg_data)
 
