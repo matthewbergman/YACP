@@ -25,12 +25,12 @@ bool yacp_eeprom_crc_mismatch_f;
 
 
 // Internal function declarations
-void send_measurement(uint16_t measurement_start, uint8_t var_len);
-void send_setting(uint16_t setting_start, uint8_t var_len);
-void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len);
-void send_hello();
-void send_ack();
-uint32_t eeprom_crc();
+void yacp_send_measurement(uint16_t measurement_start, uint8_t var_len);
+void yacp_send_setting(uint16_t setting_start, uint8_t var_len);
+void yacp_send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len);
+void yacp_send_hello();
+void yacp_send_ack();
+uint32_t yacp_eeprom_crc();
 
 // API Functions
 void yacp_init()
@@ -38,21 +38,21 @@ void yacp_init()
   /* First load the default values defined in the cal.c generated code.
    * Then attempt to load the stored settings from EEEPROM. 
    */
-  load_defaults();
-  load_settings();
+  yacp_load_defaults();
+  yacp_load_settings();
 }
 
-void load_settings()
+void yacp_load_settings()
 {  
   // Load the stored settings CRC value from EEPROM
   uint32_t stored_checksum = 0;
-  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET);
-  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 1) << 8;
-  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 2) << 16;
-  stored_checksum |= (uint32_t)eeprom_load_byte(EEPROM_CRC_OFFSET + 3) << 24;
+  stored_checksum |= (uint32_t)yacp_eeprom_load_byte(EEPROM_CRC_OFFSET);
+  stored_checksum |= (uint32_t)yacp_eeprom_load_byte(EEPROM_CRC_OFFSET + 1) << 8;
+  stored_checksum |= (uint32_t)yacp_eeprom_load_byte(EEPROM_CRC_OFFSET + 2) << 16;
+  stored_checksum |= (uint32_t)yacp_eeprom_load_byte(EEPROM_CRC_OFFSET + 3) << 24;
 
   // Generate a CRC of the stored settings in EEPROM
-  uint32_t calculated_checksum = eeprom_crc();
+  uint32_t calculated_checksum = yacp_eeprom_crc();
 
   // Make sure the data in EEPROM has not changed since
   // the CRC was stored during the last call to save_settings().
@@ -67,9 +67,10 @@ void load_settings()
 
   // The EEPROM CRC is valid, load the settings into the cal settings struct.
   uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
+  size_t i;
+  for (i=0; i<sizeof(cal.settings); i++)
   {
-    cal_ptr[i] = eeprom_load_byte(i + EEPROM_SETTINGS_OFFSET);
+    cal_ptr[i] = yacp_eeprom_load_byte(i + EEPROM_SETTINGS_OFFSET);
   }
 
   // Verify tha the revision compiled into cal.h matches what is stored in
@@ -82,33 +83,37 @@ void load_settings()
 
     // Clear out the settings struct of the incorrect EEPROM data
     memset(&cal.settings, 0, sizeof(cal.settings));
-    // Load the defaults from the generated code and save to EEPROM
-    load_defaults();
-    save_settings();
+    
+	// Load the defaults from the generated code and save to EEPROM
+    yacp_load_defaults();
+    yacp_save_settings();
 
     // A new cal will need to be pushed and saved using the GUI.
   }
 }
 
-void save_settings()
+void yacp_save_settings()
 {
   // Save the cal settings struct to EEPROM, byte for byte.
   uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
-    eeprom_store_byte(i + EEPROM_SETTINGS_OFFSET, cal_ptr[i]);
+  size_t i;
+  for (i=0; i<sizeof(cal.settings); i++)
+    yacp_eeprom_store_byte(i + EEPROM_SETTINGS_OFFSET, cal_ptr[i]);
 
   // Calculate the CRC of the EEPROM data just saved
-  uint32_t crc = eeprom_crc();
+  uint32_t crc = yacp_eeprom_crc();
 
   // Save the CRC value to EEPROM for validation on next startup
-  eeprom_store_byte(EEPROM_CRC_OFFSET, crc);
-  eeprom_store_byte(EEPROM_CRC_OFFSET + 1, crc >> 8);
-  eeprom_store_byte(EEPROM_CRC_OFFSET + 2, crc >> 16);
-  eeprom_store_byte(EEPROM_CRC_OFFSET + 3, crc >> 24);
+  yacp_eeprom_store_byte(EEPROM_CRC_OFFSET, crc);
+  yacp_eeprom_store_byte(EEPROM_CRC_OFFSET + 1, crc >> 8);
+  yacp_eeprom_store_byte(EEPROM_CRC_OFFSET + 2, crc >> 16);
+  yacp_eeprom_store_byte(EEPROM_CRC_OFFSET + 3, crc >> 24);
+
+  yacp_eeprom_persist();
 }
 
 // Internal Functions
-void send_measurement(uint16_t measurement_start, uint8_t var_len)
+void yacp_send_measurement(uint16_t measurement_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
@@ -123,12 +128,12 @@ void send_measurement(uint16_t measurement_start, uint8_t var_len)
   buf[6] = 0;
   buf[7] = 0;
 
-  memcpy(&buf[4], (uint8_t*)&cal.measurements + measurement_start, var_len);
+  yacp_memcpy(&buf[4], (uint8_t*)&cal.measurements + measurement_start, var_len);
     
-  can_send(YACP_UPDATE_ID, buf);
+  yacp_can_send(YACP_UPDATE_ID, buf);
 }
 
-void send_setting(uint16_t setting_start, uint8_t var_len)
+void yacp_send_setting(uint16_t setting_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
@@ -143,12 +148,12 @@ void send_setting(uint16_t setting_start, uint8_t var_len)
   buf[6] = 0;
   buf[7] = 0;
 
-  memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
+  yacp_memcpy(&buf[4], (uint8_t*)&cal.settings + setting_start, var_len);
     
-  can_send(YACP_UPDATE_ID, buf);
+  yacp_can_send(YACP_UPDATE_ID, buf);
 }
 
-void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len)
+void yacp_send_override(uint8_t message_type, uint16_t override_start, uint8_t var_len)
 {
   uint8_t buf[8];
 
@@ -163,12 +168,12 @@ void send_override(uint8_t message_type, uint16_t override_start, uint8_t var_le
   buf[6] = 0;
   buf[7] = 0;
 
-  memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
+  yacp_memcpy(&buf[4], (uint8_t*)&cal.overrides + override_start + 1, var_len);
     
- can_send(YACP_UPDATE_ID, buf);
+  yacp_can_send(YACP_UPDATE_ID, buf);
 }
 
-void send_hello()
+void yacp_send_hello()
 {
   uint8_t buf[8];
 
@@ -183,10 +188,10 @@ void send_hello()
   buf[6] = CAL_REVISION;
   buf[7] = CAL_PROTOCOL_VERSION;
     
-  can_send(YACP_UPDATE_ID, buf);
+  yacp_can_send(YACP_UPDATE_ID, buf);
 }
 
-void send_ack()
+void yacp_send_ack()
 {
   uint8_t buf[8];
 
@@ -200,16 +205,15 @@ void send_ack()
   buf[6] = 0;
   buf[7] = 0;
     
-  can_send(YACP_UPDATE_ID, buf);
+  yacp_can_send(YACP_UPDATE_ID, buf);
 }
 
-void handle_can(uint32_t id, uint8_t* buf)
+void yacp_handle_can(uint32_t id, uint8_t* buf)
 {
   uint8_t device_id;
   uint8_t message_type;
   uint16_t var_start;
   uint8_t var_len;
-  uint32_t value;
 
   switch (id)
   {
@@ -220,28 +224,9 @@ void handle_can(uint32_t id, uint8_t* buf)
       var_start |= (uint16_t)buf[2] << 8;
       var_len = buf[3];
 
-      if (var_len == 1)
-      {
-        value = buf[4];
-      }
-      else if (var_len == 2)
-      {
-        value = buf[5];
-        value |= (uint32_t)buf[4] << 8;
-      }
-      else if (var_len == 4)
-      {
-        value = buf[7];
-        value |= (uint32_t)buf[6] << 8;
-        value |= (uint32_t)buf[5] << 16;
-        value |= (uint32_t)buf[4] << 24;
-      }
-      else
-        value = 0;
-
       if (message_type == CAL_HELLO)
       {
-        send_hello();
+        yacp_send_hello();
       }
 
       if (device_id != cal.settings.device_id)
@@ -249,12 +234,20 @@ void handle_can(uint32_t id, uint8_t* buf)
 
       if (message_type == CAL_UPDATE_SETTING)
       {
-        memcpy((uint8_t*)&cal.settings + var_start, &value, var_len);
-        send_ack();
+    	yacp_can_send(0x200+var_start, buf);
+
+    	yacp_can_send(0x300+var_start, (uint8_t*)&cal.settings);
+
+    	//memcpy(((uint8_t*)&cal.settings) + var_start, &value, var_len);
+    	yacp_update_setting((uint8_t*)&cal.settings, var_start, var_len, buf);
+
+    	yacp_can_send(0x400+var_start, (uint8_t*)&cal.settings);
+
+        yacp_send_ack();
       }
       else if (message_type == CAL_READ_SETTING)
       {
-        send_setting(var_start, var_len);
+        yacp_send_setting(var_start, var_len);
       }
       else if (message_type == CAL_OVERRIDE_ON || message_type == CAL_OVERRIDE_OFF)
       {
@@ -263,33 +256,34 @@ void handle_can(uint32_t id, uint8_t* buf)
         else
           *((uint8_t*)&cal.overrides + var_start) = CAL_PASSTHRU;
           
-        memcpy((uint8_t*)&cal.overrides + var_start + 1, &value, 4);
+        //memcpy((uint8_t*)&cal.overrides + var_start + 1, &value, 4);
+        yacp_update_setting((uint8_t*)&cal.overrides, var_start, 4, buf);
 
-        send_ack();
+        yacp_send_ack();
       }
       else if (message_type == CAL_READ_OVERRIDE)
       {
         if (*((uint8_t*)&cal.overrides + var_start) == CAL_PASSTHRU)
-          send_override(CAL_OVERRIDE_OFF, var_start, var_len);
+          yacp_send_override(CAL_OVERRIDE_OFF, var_start, var_len);
         else
-          send_override(CAL_OVERRIDE_ON, var_start, var_len);
+          yacp_send_override(CAL_OVERRIDE_ON, var_start, var_len);
       }
       else if (message_type == CAL_READ_MEASUREMENT)
       {
-        send_measurement(var_start, var_len);
+        yacp_send_measurement(var_start, var_len);
       }
       else if (message_type == CAL_SAVE_SETTINGS)
       {
-        save_settings();
+        yacp_save_settings();
         
-        send_ack();
+        yacp_send_ack();
       }
       
       break;
   }
 }
 
-uint32_t eeprom_crc() 
+uint32_t yacp_eeprom_crc() 
 {
   // CRC calc by Christopher Andrews.
   const uint32_t crc_table[16] = 
@@ -303,9 +297,10 @@ uint32_t eeprom_crc()
   uint32_t crc = ~0L;
   uint8_t val;
   
-  for (uint16_t index = 0; index < sizeof(cal.settings); ++index) 
+  uint16_t index;
+  for (index = 0; index < sizeof(cal.settings); ++index)
   {
-    val = eeprom_load_byte(index + EEPROM_SETTINGS_OFFSET);
+    val = yacp_eeprom_load_byte(index + EEPROM_SETTINGS_OFFSET);
     
     crc = crc_table[(crc ^ val) & 0x0f] ^ (crc >> 4);
     crc = crc_table[(crc ^ (val >> 4)) & 0x0f] ^ (crc >> 4);

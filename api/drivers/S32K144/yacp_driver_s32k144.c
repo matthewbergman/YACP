@@ -50,7 +50,7 @@ void yacp_can_init()
 	FLEXCAN_DRV_Receive(INST_CANCOM1, YACP_RX_MAILBOX, &canMsgBuff);
 }
 
-void can_send(uint32_t id, uint8_t* buf)
+void yacp_can_send(uint32_t id, uint8_t* buf)
 {
 	/* Configure TX message buffer with index TX_MSG_ID and TX_MAILBOX*/
 	FLEXCAN_DRV_ConfigTxMb(INST_CANCOM1, YACP_TX_MAILBOX, &dataInfo, id);
@@ -76,13 +76,13 @@ void yacp_can_recv()
 
 // All EEPROM assume a start address of 0. Add an offset as required by your project if there is a specific
 // EEPROM region you must use for storing cal.
-uint8_t eeprom_load_byte(uint16_t addr)
+uint8_t yacp_eeprom_load_byte(uint16_t addr)
 {
 	uint8_t* p_eeprom = (uint8_t*)flashSSDConfig.EERAMBase;
 	return p_eeprom[addr];
 }
 
-void eeprom_store_byte(uint16_t addr, uint8_t val)
+void yacp_eeprom_store_byte(uint16_t addr, uint8_t val)
 {
 	uint8_t tmp = val;
 
@@ -90,4 +90,41 @@ void eeprom_store_byte(uint16_t addr, uint8_t val)
 	{
 		FLASH_DRV_EEEWrite(&flashSSDConfig, flashSSDConfig.EERAMBase + addr, 1, &tmp);
 	}
+}
+
+void yacp_eeprom_persist()
+{
+	// Not needed
+}
+
+void yacp_memcpy(void* s1, const void* s2, uint16_t n)
+{
+	memcpy(s1, s2, n);
+}
+
+void yacp_update_setting(uint8_t* dst, uint16_t var_start, uint8_t var_len, uint8_t* buf)
+{
+	uint32_t value32;
+	uint16_t value16;
+	uint8_t value8;
+
+    if (var_len == 1)
+    {
+      value8 = buf[4];
+      memcpy(dst + var_start, &value8, var_len);
+    }
+    else if (var_len == 2)
+    {
+      value16 = buf[5];
+      value16 |= (uint32_t)buf[4] << 8;
+      memcpy(dst + var_start, &value16, var_len);
+    }
+    else if (var_len == 4)
+    {
+      value32 = buf[7];
+      value32 |= (uint32_t)buf[6] << 8;
+      value32 |= (uint32_t)buf[5] << 16;
+      value32 |= (uint32_t)buf[4] << 24;
+      memcpy(dst + var_start, &value32, var_len);
+    }
 }

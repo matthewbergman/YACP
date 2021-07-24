@@ -99,7 +99,7 @@ def impl_start():
     cfile.write("/* THIS IS GENERATED CODE FROM THE YACP PROJECT. DO NOT MODIFY! */\n\n")
     cfile.write("#include \"cal.h\"\n\n")
     cfile.write("calibration cal;\n\n")
-    cfile.write("void load_defaults()\n")
+    cfile.write("void yacp_load_defaults()\n")
     cfile.write("{\n")
 
 def impl_var(var,val):

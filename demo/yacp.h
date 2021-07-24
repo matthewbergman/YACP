@@ -31,8 +31,8 @@
 #define EEPROM_SETTINGS_OFFSET 4
 
 // YACP Internal Functions
-void load_defaults();
-void load_settings();
-void save_settings();
+void yacp_load_defaults();
+void yacp_load_settings();
+void yacp_save_settings();
 
 #endif

@@ -4,7 +4,7 @@
 
 calibration cal;
 
-void load_defaults()
+void yacp_load_defaults()
 {
 	cal.settings.device_id = 1;
 	cal.settings.revision = 4;

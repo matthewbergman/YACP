@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define CAL_PASSTHRU 0
 #define CAL_OVERRIDDEN 1
@@ -55,7 +56,7 @@ typedef struct __attribute__((packed)) cal_override
 // Sends a CAN message onto the bus
 // id: CAN arbitration ID
 // buf: 8 byte buffer containing the data to be sent
-void can_send(uint32_t id, uint8_t* buf);
+void yacp_can_send(uint32_t id, uint8_t* buf);
 
 // Called frequenty to check if new CAN messages have arrived from main code.
 // Calls handle_can() when messages are received.
@@ -65,13 +66,20 @@ void yacp_can_recv();
 void yacp_can_init();
 
 // Handle a CAN message
-void handle_can(uint32_t id, uint8_t* buf);
+void yacp_handle_can(uint32_t id, uint8_t* buf);
 
 // Returns one byte of data from EEPROM address addr.
-uint8_t eeprom_load_byte(uint16_t addr);
+uint8_t yacp_eeprom_load_byte(uint16_t addr);
 
 // Stores one byte of data in val to EEPROM address addr.
-void eeprom_store_byte(uint16_t addr, uint8_t val);
+void yacp_eeprom_store_byte(uint16_t addr, uint8_t val);
+
+// For memory mapped NVM systems this will actually persist the data
+void yacp_eeprom_persist();
+
+// memcpy function that knows native byte order and types
+void yacp_memcpy(void* s1, const void* s2, uint16_t n);
+void yacp_update_setting(uint8_t* dst, uint16_t var_start, uint8_t var_len, uint8_t* buf);
 
 // YACP API
 // Called once at the start of execution by the main code. Loads default and stored settings.
