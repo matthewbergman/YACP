@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtWidgets import QHeaderView
 from PyQt5.QtWidgets import QFrame
 from PyQt5.QtWidgets import QInputDialog, QLineEdit, QFileDialog
+from PyQt5.QtWidgets import QAction, QMenu
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QThread
@@ -41,8 +42,13 @@ from PyQt5.QtCore import QByteArray
 from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtCore import QTimer
+
 from PyQt5.QtGui import QColor
 from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QCursor
+
+from pyqtgraph import PlotWidget, plot
+import pyqtgraph as pg
 
 from version import VERSION
 
@@ -58,6 +64,10 @@ class YACPcal(QMainWindow):
         self.config = configparser.ConfigParser()
         self.recentDefFiles = {}
         self.recentCalFiles = {}
+        
+        self.graph_row = -1
+        self.graph_x = list(x*10 for x in range(-100,0,1))
+        self.graph_y = list(0 for _ in range(100))
         
         self.readConfig()
 	
@@ -186,6 +196,15 @@ class YACPcal(QMainWindow):
         self.btn_save.clicked.connect(self.saveSettings)
         self.btn_save.setEnabled(False)
 
+        
+        pen = pg.mkPen(color=(255, 0, 0))
+        self.graph = pg.PlotWidget()
+        self.graph.setBackground('default')
+        self.graph.showGrid(x=True, y=True)
+        self.graph.setLabel('left', 'Measurement')
+        self.graph.setLabel('bottom', 'Ticks')
+        self.graph_line = self.graph.plot(self.graph_x, self.graph_y, pen=pen)
+
         row = 0
         grid.addWidget(self.combo_bustype, row, 0)
         grid.addWidget(self.combo_rate, row, 1)
@@ -200,6 +219,9 @@ class YACPcal(QMainWindow):
         grid.addWidget(self.btn_save, row, 0)
         row += 1
 
+        grid.addWidget(self.graph, row, 0, 1, 3)
+        row += 1
+
 
         # Measurements / Settings / Overrides
 
@@ -209,6 +231,8 @@ class YACPcal(QMainWindow):
         self.measurements_table.setHorizontalHeaderItem(1, QTableWidgetItem("Value"))
         self.measurements_table.setHorizontalHeaderItem(2, QTableWidgetItem("Type"))
         self.measurements_table.setHorizontalHeaderItem(3, QTableWidgetItem("Unit"))
+        self.measurements_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.measurements_table.customContextMenuRequested.connect(self.handleContextMenu)
         form_lbx.addWidget(self.measurements_table)
 
         self.settings_table = QTableWidget(0, 5)
@@ -230,6 +254,24 @@ class YACPcal(QMainWindow):
         self.overrides_table.setHorizontalHeaderItem(4, QTableWidgetItem("Unit"))
         self.overrides_table.cellChanged.connect(self.on_override_change)
         form_lbx.addWidget(self.overrides_table)
+
+    def handleContextMenu(self, event):
+        row = self.measurements_table.rowAt(event.y())
+        col = self.measurements_table.columnAt(event.x())
+        cell = self.measurements_table.item(row, col)
+        if cell == None:
+            return
+        
+        menu = QMenu()
+        graph_action = QAction('Graph')
+        graph_action.setProperty('measurements_table_row', row)
+        menu.addAction(graph_action)
+        menu.triggered[QAction].connect(self.contextMenuClicked)
+        menu.exec_(QCursor.pos())
+
+    def contextMenuClicked(self, item):
+        if item.text() == 'Graph':
+            self.graph_row = item.property('measurements_table_row')
         
     def update_widgets(self):
         self.measurements_table.setRowCount(self.yacp.num_measurements)
@@ -404,16 +446,25 @@ class YACPcal(QMainWindow):
             if val == value:
                 val = measurement.values[value]
                 break
+
+        if self.graph_row != -1 and self.graph_row == table_index:
+            self.graph_y = self.graph_y[1:]
+            self.graph_y.append(float(val)) 
+            self.graph_line.setData(self.graph_x, self.graph_y)   
         
         self.measurements_table.item(table_index, 1).setText(val)
 
     def updateSetting(self, table_index, offset):
+        self.settings_table.cellChanged.disconnect()
+        
         setting = self.yacp.settings[offset]
         if len(setting.choices) == 0:
             self.settings_table.item(table_index, 1).setText(str(setting.value))
         else:
             index = self.settings_table.cellWidget(table_index, 1).findData(setting.value)
             self.settings_table.cellWidget(table_index, 1).setCurrentIndex(index)
+
+        self.settings_table.cellChanged.connect(self.on_setting_change)
 
     def updateOverride(self, table_index, offset, overridden):
         override = self.yacp.overrides[offset]
@@ -554,6 +605,7 @@ class YACPcal(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('icon.ico'))
     
     excepthook = sys.excepthook
     sys.excepthook = lambda t, val, tb: excepthook(t, val, tb)

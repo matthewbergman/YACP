@@ -67,7 +67,8 @@ void load_settings()
 
   // The EEPROM CRC is valid, load the settings into the cal settings struct.
   uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
+  size_t i;
+  for (i=0; i<sizeof(cal.settings); i++)
   {
     cal_ptr[i] = eeprom_load_byte(i + EEPROM_SETTINGS_OFFSET);
   }
@@ -94,7 +95,8 @@ void save_settings()
 {
   // Save the cal settings struct to EEPROM, byte for byte.
   uint8_t* cal_ptr = (uint8_t*)&cal.settings;
-  for (size_t i=0; i<sizeof(cal.settings); i++)
+  size_t i;
+  for (i=0; i<sizeof(cal.settings); i++)
     eeprom_store_byte(i + EEPROM_SETTINGS_OFFSET, cal_ptr[i]);
 
   // Calculate the CRC of the EEPROM data just saved
@@ -303,7 +305,8 @@ uint32_t eeprom_crc()
   uint32_t crc = ~0L;
   uint8_t val;
   
-  for (uint16_t index = 0; index < sizeof(cal.settings); ++index) 
+  uint16_t index;
+  for (index = 0; index < sizeof(cal.settings); ++index)
   {
     val = eeprom_load_byte(index + EEPROM_SETTINGS_OFFSET);
     
