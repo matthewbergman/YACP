@@ -36,13 +36,13 @@ void yacp_can_init()
 	// Define the following somewhere pointed at the real slot
 	// #define CAN_A_YACP_CMD appCANDirectSlotMsgElementA[x]
 
-	CAN_A_YACP_CMD.messageObj.id 			= YACP_COMMAND_ID;
-	CAN_A_YACP_CMD.messageObj.extended 		= 0;
-	CAN_A_YACP_CMD.messageObj.length 		= 8;
-	CAN_A_YACP_CMD.messageObj.remote 		= 0;
-	CAN_A_YACP_CMD.ready 					= 0;
-	CAN_A_YACP_CMD.read 					= 0;
-	CAN_A_YACP_CMD.write 					= 0;
+	CAN_B_YACP_CMD.messageObj.id 			= YACP_COMMAND_ID;
+	CAN_B_YACP_CMD.messageObj.extended 		= 0;
+	CAN_B_YACP_CMD.messageObj.length 		= 8;
+	CAN_B_YACP_CMD.messageObj.remote 		= 0;
+	CAN_B_YACP_CMD.ready 					= 0;
+	CAN_B_YACP_CMD.read 					= 0;
+	CAN_B_YACP_CMD.write 					= 0;
 
 	// Option 2) Use the CAN RX callback for receiving all traffic
 	//F_Abstr_CAN_InstallRxSltCall(ycap_can_recv_callback);
@@ -60,23 +60,23 @@ void yacp_can_send(uint32_t id, uint8_t* buf)
 	for (i=0; i<8; i++)
 		yacp_can_msg.data[i] = buf[i];
 
-	F_Abstr_CAN_Transmit2Queue(CAN_CTRL_A, &yacp_can_msg);
+	F_Abstr_CAN_Transmit2Queue(CAN_CTRL_B, &yacp_can_msg);
 }
 
 void yacp_can_recv()
 {
 	// Polling style receive, call from the main loop periodically
-	if (1 == F_Abstr_CAN_ReceiveDirect(&CAN_A_YACP_CMD, &yacp_can_msg_in))
+	if (1 == F_Abstr_CAN_ReceiveDirect(&CAN_B_YACP_CMD, &yacp_can_msg_in))
 	{
-		handle_can(yacp_can_msg_in.id, yacp_can_msg_in.data);
+		yacp_handle_can(yacp_can_msg_in.id, yacp_can_msg_in.data);
 	}
 }
 
 void ycap_can_recv_callback(CanControllerIdType channel, CANMsgElement_t *messageObj)
 {
-	if (channel == CAN_CTRL_A)
+	if (channel == CAN_CTRL_B)
 	{
-		handle_can(messageObj->id, messageObj->data);
+		yacp_handle_can(messageObj->id, messageObj->data);
 	}
 }
 

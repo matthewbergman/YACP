@@ -171,7 +171,8 @@ class YACPcal(QMainWindow):
 
         self.combo_bustype = QComboBox()
         self.combo_bustype.addItem("PCAN")
-        self.combo_bustype.addItem("KVaser")     
+        self.combo_bustype.addItem("KVaser")
+        self.combo_bustype.addItem("IXXAT")
 
         self.combo_rate = QComboBox()
         self.combo_rate.addItem("500k")
@@ -566,6 +567,9 @@ class YACPcal(QMainWindow):
             interface = 'PCAN_USBBUS1'
         elif bustype == 'KVaser':
             bustype = 'kvaser'
+            interface = '0'
+        elif bustype == 'IXXAT':
+            bustype = 'ixxat'
             interface = '0'
 
         if bitrate == "125k":

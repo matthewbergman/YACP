@@ -257,7 +257,7 @@ void yacp_handle_can(uint32_t id, uint8_t* buf)
           *((uint8_t*)&cal.overrides + var_start) = CAL_PASSTHRU;
           
         //memcpy((uint8_t*)&cal.overrides + var_start + 1, &value, 4);
-        yacp_update_setting((uint8_t*)&cal.overrides, var_start, 4, buf);
+        yacp_update_setting((uint8_t*)&cal.overrides, var_start+1, 4, buf);
 
         yacp_send_ack();
       }
