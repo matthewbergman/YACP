@@ -1,0 +1,17 @@
+set v=1.1.1
+
+cd YACPgen
+echo VERSION="%v%" > version.py
+pyinstaller -y YACPgen.spec
+cd ..
+
+cd YACPcal
+echo VERSION="%v%" > version.py
+pyinstaller -y YACPcal.spec
+cd ..
+
+
+iscc "/dMyAppVersion=%v%" YACP.iss
+
+cp YACPgen/dist/YACPgen.exe binaries/YACPgen-x86_64-%v%.exe
+cp YACPcal/dist/YACPcal.exe binaries/YACPcal-x86_64-%v%.exe
