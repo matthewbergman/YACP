@@ -1,4 +1,4 @@
-set v=1.1.1
+set v=1.1.2
 
 cd YACPgen
 echo VERSION="%v%" > version.py
@@ -13,5 +13,7 @@ cd ..
 
 iscc "/dMyAppVersion=%v%" YACP.iss
 
-cp YACPgen/dist/YACPgen.exe binaries/YACPgen-x86_64-%v%.exe
-cp YACPcal/dist/YACPcal.exe binaries/YACPcal-x86_64-%v%.exe
+REM copy YACPgen/dist/YACPgen.exe binaries/YACPgen-x86_64-%v%.exe
+REM copy YACPcal/dist/YACPcal.exe binaries/YACPcal-x86_64-%v%.exe
+
+pause

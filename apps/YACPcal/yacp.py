@@ -323,6 +323,7 @@ class YACPProtocol(QObject):
                     unit = m["unit"]
                 
                 measurement = Measurement(m["name"], m["type"], unit, measurement_offset, self.num_measurements)
+                #print(m["name"]+" "+str(measurement_offset)+" ")
 
                 if "values" in m.keys():
                     for value in m["values"]:

@@ -5,9 +5,9 @@ block_cipher = None
 
 a = Analysis(['YACPcal.py'],
              pathex=[],
-             binaries=[('PCANBasic.dll','.')],
+             binaries=[],
              datas=[('icon.ico','.')],
-             hiddenimports=['can.interfaces.pcan','can.interfaces.kvaser','can.interfaces.ixxat'],
+             hiddenimports=['can.interfaces.pcan','can.interfaces.kvaser','can.interfaces.ixxat','pyqtgraph.*'],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
