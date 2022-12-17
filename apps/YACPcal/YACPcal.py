@@ -173,6 +173,7 @@ class YACPcal(QMainWindow):
         self.combo_bustype.addItem("PCAN")
         self.combo_bustype.addItem("KVaser")
         self.combo_bustype.addItem("IXXAT")
+        self.combo_bustype.addItem("Vector")
 
         self.combo_rate = QComboBox()
         self.combo_rate.addItem("500k")
@@ -570,6 +571,9 @@ class YACPcal(QMainWindow):
             interface = '0'
         elif bustype == 'IXXAT':
             bustype = 'ixxat'
+            interface = '0'
+        elif bustype == 'Vector':
+            bustype = 'vector'
             interface = '0'
 
         if bitrate == "125k":
