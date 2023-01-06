@@ -144,7 +144,7 @@ class CANThread(QThread):
         msg_data = [YACPProtocol.CAL_HELLO,0,0,0,0,0,0,0]
         msg_id = YACPProtocol.YACP_COMMAND_ID
 
-        msg = can.Message(arbitration_id=msg_id, extended_id=False, data=msg_data)
+        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
         if self.bus != None:
             try:
                 self.bus.send(msg, 1)
@@ -212,7 +212,7 @@ class CANThread(QThread):
         if self.device_id == -1:
             return
         
-        msg = can.Message(arbitration_id=msg_id, extended_id=False, data=msg_data)
+        msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
         if self.bus != None:
             try:
                 self.bus.send(msg, 1)
