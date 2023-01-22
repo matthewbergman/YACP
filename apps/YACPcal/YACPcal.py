@@ -306,6 +306,7 @@ class YACPcal(QMainWindow):
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.measurements_table.setItem(row, 3, item)
             row += 1
+        self.measurements_table.horizontalHeader().resizeSections(QHeaderView.ResizeToContents)
 
         row = 0
         self.settings_table.cellChanged.disconnect()
@@ -340,6 +341,7 @@ class YACPcal(QMainWindow):
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.settings_table.setItem(row, 4, item)
             row += 1
+        self.settings_table.horizontalHeader().resizeSections(QHeaderView.ResizeToContents)
         self.settings_table.cellChanged.connect(self.on_setting_change)
 
         row = 0
@@ -371,6 +373,7 @@ class YACPcal(QMainWindow):
             item.setFlags(item.flags() ^ Qt.ItemIsEditable)
             self.overrides_table.setItem(row, 4, item)
             row += 1
+        self.overrides_table.horizontalHeader().resizeSections(QHeaderView.ResizeToContents)
         self.overrides_table.cellChanged.connect(self.on_override_change)
 
     def on_setting_change(self, table_index, column):
