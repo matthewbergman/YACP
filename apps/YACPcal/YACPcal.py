@@ -74,6 +74,7 @@ class YACPcal(QMainWindow):
         self.init_widget()
 
         self.yacp = YACPProtocol()
+        self.yacp_base_can_id = 0x100
         
         self.yacp.app_update_device_state_signal.connect(self.updateDeviceState)
         self.yacp.app_update_measurement_signal.connect(self.updateMeasurement)
@@ -166,6 +167,9 @@ class YACPcal(QMainWindow):
         grid_frame.setFrameShape(QFrame.StyledPanel)
         grid_frame.setFrameShadow(QFrame.Raised)
         grid = QGridLayout(grid_frame)
+        grid.setColumnStretch(0,1)
+        grid.setColumnStretch(1,1)
+        grid.setColumnStretch(2,1)
 
         form_lbx.addWidget(grid_frame)
 
@@ -194,6 +198,9 @@ class YACPcal(QMainWindow):
         self.btn_device_connect.clicked.connect(self.deviceConnect)
         self.btn_device_connect.setEnabled(False)
 
+        self.txt_yacp_can_base_id = QLineEdit(self)
+        self.txt_yacp_can_base_id.setText(hex(0x100))
+
         self.btn_save = QPushButton("Persist and Save Cal")
         self.btn_save.clicked.connect(self.saveSettings)
         self.btn_save.setEnabled(False)
@@ -218,7 +225,9 @@ class YACPcal(QMainWindow):
         grid.addWidget(self.btn_device_connect, row, 2)
         row += 1
 
-        grid.addWidget(self.btn_save, row, 0)
+        grid.addWidget(QLabel("CAN ID"), row, 0)
+        grid.addWidget(self.txt_yacp_can_base_id, row, 1)
+        grid.addWidget(self.btn_save, row, 2)
         row += 1
 
         grid.addWidget(self.graph, row, 0, 1, 3)
@@ -489,6 +498,12 @@ class YACPcal(QMainWindow):
     def sendHello(self):
         self.combo_devices.clear()
         self.btn_device_connect.setEnabled(False)
+
+        #try:
+        base_can_id = int(self.txt_yacp_can_base_id.text(),16)
+        self.yacp.set_base_can_id(base_can_id)
+        #except:
+        #    print("Could not set base CAN ID")
         
         self.yacp.sendHello()
 

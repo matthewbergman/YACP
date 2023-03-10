@@ -35,9 +35,6 @@ lengths["int32"] = 4
 lengths["float"] = 4
 
 class CANThread(QThread):
-    YACP_COMMAND_ID = 0x100
-    YACP_UPDATE_ID = 0x101
-
     update_measurement_signal = pyqtSignal(int,int,int,int,int,int)
     update_setting_signal = pyqtSignal(int,int,int,int,int,int)
     update_override_signal = pyqtSignal(bool,int,int,int,int,int,int)
@@ -48,8 +45,14 @@ class CANThread(QThread):
         self.bus = None
         self.device_id = -1
         self.stop = False
+        self.yacp_update_id = YACPProtocol.YACP_UPDATE_ID
+        self.yacp_command_id = YACPProtocol.YACP_COMMAND_ID
         
         QThread.__init__(self)
+
+    def set_base_can_id(self, base_can_id):
+        self.yacp_command_id = base_can_id
+        self.yacp_update_id = base_can_id + 1
 
     def connect(self, _type, _channel, _bitrate):
         try:
@@ -73,7 +76,7 @@ class CANThread(QThread):
         while self.stop == False:
             if self.bus != None:
                 for msg in self.bus:
-                    if msg.arbitration_id == YACPProtocol.YACP_UPDATE_ID:
+                    if msg.arbitration_id == self.yacp_update_id:
                         device_id = msg.data[0] >> 4
                         message_type = msg.data[0] & 0x0F
                         var_start = msg.data[1]
@@ -107,7 +110,7 @@ class CANThread(QThread):
     @pyqtSlot(int,int,int,int,int,int)
     def setSetting(self, var_start, var_len, b0,b1,b2,b3):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_UPDATE_SETTING
         msg_data[1] = var_start & 0xFF
@@ -123,7 +126,7 @@ class CANThread(QThread):
     @pyqtSlot(int,int,int,int,int,int,int)
     def setOverride(self, enabled, var_start, var_len, b0,b1,b2,b3):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         if enabled == True:
             msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_OVERRIDE_ON
@@ -142,7 +145,7 @@ class CANThread(QThread):
     @pyqtSlot()
     def sendHello(self):
         msg_data = [YACPProtocol.CAL_HELLO,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg = can.Message(arbitration_id=msg_id, is_extended_id=False, data=msg_data)
         if self.bus != None:
@@ -154,7 +157,7 @@ class CANThread(QThread):
     @pyqtSlot()
     def sendSaveSettings(self):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_SAVE_SETTINGS
 
@@ -163,7 +166,7 @@ class CANThread(QThread):
     @pyqtSlot(int,int)
     def readMeasurement(self, var_start, var_len):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_READ_MEASUREMENT
         msg_data[1] = var_start & 0xFF
@@ -179,7 +182,7 @@ class CANThread(QThread):
     @pyqtSlot(int,int)
     def readSetting(self, var_start, var_len):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_READ_SETTING
         msg_data[1] = var_start & 0xFF
@@ -195,7 +198,7 @@ class CANThread(QThread):
     @pyqtSlot(int,int)
     def readOverride(self, var_start, var_len):
         msg_data = [0,0,0,0,0,0,0,0]
-        msg_id = YACPProtocol.YACP_COMMAND_ID
+        msg_id = self.yacp_command_id
 
         msg_data[0] = (self.device_id << 4) | YACPProtocol.CAL_READ_OVERRIDE
         msg_data[1] = var_start & 0xFF
@@ -612,6 +615,9 @@ class YACPProtocol(QObject):
             self.can_thread.connect(bustype, interface, bitrate)
         else:
             self.can_thread.disconnect()
+
+    def set_base_can_id(self, base_can_id):
+        self.can_thread.set_base_can_id(base_can_id)
 
     @pyqtSlot(int)
     def handleCANStatus(self, status):
