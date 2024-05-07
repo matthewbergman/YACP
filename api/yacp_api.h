@@ -45,11 +45,15 @@ typedef union cal_value
 } cal_value;
 
 // Each override has a status (OVERRIDDEN, PASSTHROUGH), and a value.
-typedef struct __attribute__((packed)) cal_override
+
+#pragma pack(push)
+#pragma pack(1)
+typedef struct cal_override
 {
   uint8_t status;
   cal_value value;
 } cal_override;
+#pragma pack(pop)
 
 // Driver Functions
 

@@ -48,7 +48,9 @@ def header_start(rev):
     hfile.write("#define CAL_REVISION "+rev+"\n\n")
 
 def measurements_start():
-    hfile.write("typedef struct __attribute__((packed)) cal_measurements\n")
+    hfile.write("#pragma pack(push)\n")
+    hfile.write("#pragma pack(1)\n")
+    hfile.write("typedef struct cal_measurements\n")
     hfile.write("{\n")
 
 def measurements_var(name,cal_type,unit):
@@ -61,7 +63,8 @@ def measurements_end():
     
 
 def settings_start():
-    hfile.write("typedef struct __attribute__((packed)) cal_settings\n")
+    hfile.write("#pragma pack(1)\n")
+    hfile.write("typedef struct cal_settings\n")
     hfile.write("{\n")
 
 def settings_var(name,cal_type,unit):
@@ -74,7 +77,8 @@ def settings_end():
     
 
 def override_start():
-    hfile.write("typedef struct __attribute__((packed)) cal_overrides\n")
+    hfile.write("#pragma pack(1)\n")
+    hfile.write("typedef struct cal_overrides\n")
     hfile.write("{\n")
 
 def override_var(name,unit):
@@ -83,7 +87,8 @@ def override_var(name,unit):
     hfile.write("\tcal_override "+name+";"+unit+"\n")
 
 def override_end():
-    hfile.write("} cal_overrides;\n\n")
+    hfile.write("} cal_overrides;\n")
+    hfile.write("#pragma pack(pop)\n\n")
     
 
 def header_end():
