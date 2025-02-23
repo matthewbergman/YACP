@@ -1,4 +1,4 @@
-set v=1.4.0
+set v=1.4.2
 
 cd YACPgen
 echo VERSION="%v%" > version.py

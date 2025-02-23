@@ -17,6 +17,7 @@ from version import VERSION
 import json
 import sys
 import re
+import os
 
 lengths = {}
 lengths["uint8"] = 1
@@ -117,11 +118,15 @@ def impl_end():
 def choice_enum(name, val):
     hfile.write("#define "+name+" "+val+"\n")
 
-if len(sys.argv) != 2:
-    print("YACPgen "+VERSION+" Usage: YACPgen.exe ./path/to/project-def.json")
+if len(sys.argv) != 2 and len(sys.argv) != 3:
+    print("YACPgen "+VERSION+" Usage: YACPgen.exe ./path/to/project-def.json [./path/to/output]")
     sys.exit(1)
     
 def_filename = sys.argv[1]
+try:
+    output_dir = sys.argv[2]
+except:
+    output_dir = "."
 
 try:
     def_file = open(def_filename, 'r')
@@ -148,7 +153,7 @@ if found_required_settings != 2:
 
 
 try:
-    hfile = open('cal.h','w')
+    hfile = open(os.path.join(output_dir,'cal.h'),'w')
 except:
     print("Failed to open cal.h for writing!")
     sys.exit(1)
@@ -181,6 +186,8 @@ for measurement in defs["measurements"]:
     unit = ""
     if "unit" in measurement.keys():
         unit = measurement["unit"]
+    elif "units" in measurement.keys():
+        unit = measurement["units"]
     measurements_var(measurement["name"], measurement["type"], unit)
 measurements_end()
 
@@ -189,6 +196,8 @@ for setting in defs["settings"]:
     unit = ""
     if "unit" in setting.keys():
         unit = setting["unit"]
+    elif "units" in setting.keys():
+        unit = setting["units"]
     settings_var(setting["name"], setting["type"], unit)
 settings_end()
 
@@ -197,6 +206,8 @@ for override in defs["overrides"]:
     unit = ""
     if "unit" in override.keys():
         unit = override["unit"]
+    elif "units" in override.keys():
+        unit = override["units"]
     override_var(override["name"], unit)
 override_end()
 
@@ -205,7 +216,7 @@ header_end()
 hfile.close()
 
 try:
-    cfile = open('cal.c','w')
+    cfile = open(os.path.join(output_dir,'cal.c'),'w')
 except:
     print("Failed to open cal.c for writing!")
     sys.exit(1)
