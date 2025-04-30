@@ -76,7 +76,7 @@ class CANThread(QThread):
         while self.stop == False:
             if self.bus != None:
                 for msg in self.bus:
-                    if msg.arbitration_id == self.yacp_update_id:
+                    if msg.arbitration_id == self.yacp_update_id and msg.dlc == 8:
                         device_id = msg.data[0] >> 4
                         message_type = msg.data[0] & 0x0F
                         var_start = msg.data[1]

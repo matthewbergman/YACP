@@ -182,7 +182,11 @@ if written:
     hfile.write("\n")
 
 measurements_start()
+revision_measurement_found = False
 for measurement in defs["measurements"]:
+    if measurement["name"] == 'revision':
+        revision_measurement_found = True
+        
     unit = ""
     if "unit" in measurement.keys():
         unit = measurement["unit"]
@@ -222,6 +226,16 @@ except:
     sys.exit(1)
 
 impl_start()
+
+revision = None
+try:
+    revision = defs["revision"]
+except:
+    pass
+
+if revision_measurement_found and revision != None:
+    cfile.write("\tcal.measurements.revision = "+revision+";\n\n")
+
 for setting in defs["settings"]:
     impl_var(setting["name"], setting["default"])
 impl_end()
