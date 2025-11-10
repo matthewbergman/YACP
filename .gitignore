@@ -52,7 +52,6 @@ dkms.conf
 
 # Configuration
 *.ini
-*.json
 *.csv
 
 # Byte-compiled / optimized / DLL files

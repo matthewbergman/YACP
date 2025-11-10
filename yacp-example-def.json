@@ -1,0 +1,129 @@
+{
+	"revision": "21",
+	"sections": [
+		{
+			"name": "Section Name",
+			"description": "A description of this section"
+		}
+	],
+	"measurements": [
+		{
+			"name": "revision",
+			"type": "uint16",
+			"notes": "YACP def revision, must match running firmware"
+		},
+		{
+			"name": "bms_state",
+			"type": "uint8",
+			"values": [
+				{
+					"value": "0", 
+					"name": "Value 1"
+				},
+				{
+					"value": "1", 
+					"name": "Value 2"
+				}
+			]
+		},
+		{
+			"name": "signal_types",
+			"type": "uint16",
+			"notes": "types: uint8, uint16, uint32, int8, int16, int32, float"
+		},
+		{
+			"name": "display_in_hex",
+			"type": "uint16",
+			"display": "hex",
+			"notes": "display: decimal, hex, binary, hidden"
+		}
+	],
+	"settings": [
+		{
+			"name": "device_id",
+			"type": "uint8",
+			"default": "2",
+			"lockable": "1",
+			"notes": "Required. Lockable means it cannot be changed when def file is locked."
+		},
+		{
+			"name": "revision",
+			"type": "uint8",
+			"default": "14",
+			"display": "hidden"
+		},
+		{
+			"name": "setting_name",
+			"type": "uint8",
+			"default": "0",
+			"choices": [
+				{
+					"value": "0",
+					"name": "Option 1",
+					"notes": "Some notes about option 1"
+				},
+				{
+					"value": "1",
+					"name": "Option 2"
+				},
+				{
+					"value": "2",
+					"name": "Option 3"
+				}
+			],
+			"notes": "Some notes",
+			"section": "Section Name"
+		},
+		{
+			"name": "signal_types",
+			"type": "uint16",
+			"notes": "types: uint8, uint16, uint32, int8, int16, int32, float",
+			"min": "0",
+			"max": "100",
+			"unit": "unit"
+		},
+		{
+			"name": "display_in_hex",
+			"type": "uint16",
+			"default": "0x100",
+			"display": "hex",
+			"notes": "display: decimal, hex, binary, hidden"
+		}
+	],
+	"overrides": [
+		{
+			"name": "override_name",
+			"type": "uint8",
+			"section": "Section Name",
+			"min": "0",
+			"max": "100",
+			"unit": "unit"
+		},
+		{
+			"name": "override_with_choices",
+			"type": "uint8",
+			"choices": [
+				{
+					"value": "0",
+					"name": "Option 1"
+				},
+				{
+					"value": "1",
+					"name": "Option 2"
+				},
+				{
+					"value": "2",
+					"name": "Option 3"
+				}
+			],
+			"notes": "Some notes",
+			"section": "Section Name"
+		},
+		{
+			"name": "display_in_hex",
+			"type": "uint16",
+			"display": "hex",
+			"notes": "display: decimal, hex, binary, hidden"
+		}
+	]
+}
