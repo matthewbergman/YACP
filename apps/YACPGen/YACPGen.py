@@ -183,14 +183,9 @@ if written:
 
 measurements_start()
 revision_measurement_found = False
-project_id_measurement_found = False
 for measurement in defs["measurements"]:
     if measurement["name"] == 'revision':
         revision_measurement_found = True
-    if measurement["name"] == 'project_id':
-        project_id_measurement_found = True
-    if measurement["name"] == 'build_num':
-        build_num_measurement_found = True
         
     unit = ""
     if "unit" in measurement.keys():
@@ -238,26 +233,8 @@ try:
 except:
     pass
 
-project_id = None
-try:
-    project_id = defs["project_id"]
-except:
-    pass
-
-build_num = None
-try:
-    build_num = defs["build_num"]
-except:
-    pass
-
 if revision_measurement_found and revision != None:
     cfile.write("\tcal.measurements.revision = "+revision+";\n\n")
-
-if project_id_measurement_found and project_id != None:
-    cfile.write("\tcal.measurements.project_id = "+project_id+";\n\n")
-
-if build_num_measurement_found and build_num != None:
-    cfile.write("\tcal.measurements.build_num = "+build_num+";\n\n")
 
 for setting in defs["settings"]:
     impl_var(setting["name"], setting["default"])
