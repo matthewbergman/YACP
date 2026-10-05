@@ -236,8 +236,12 @@ except:
 if revision_measurement_found and revision != None:
     cfile.write("\tcal.measurements.revision = "+revision+";\n\n")
 
+cfile.write("\tif (cal.settings.device_id == 0 || cal.settings.device_id == 0xFF)\n")
+impl_var("device_id", defs["settings"]["device_id"]["default"])
+
 for setting in defs["settings"]:
-    impl_var(setting["name"], setting["default"])
+    if not setting["name"] == "device_id":
+        impl_var(setting["name"], setting["default"])
 impl_end()
 
 cfile.close()
